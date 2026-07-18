@@ -8,7 +8,7 @@ namespace DropFolders;
 public partial class Form1 : Form
 {
     private static readonly Font TitleFont = new("Segoe UI", 10);
-    private const int GridSize = 58;
+    private const int GridSize = 40;
     // EditControl: break on hyphens and hard-break words longer than the line.
     // Label paints with its own flags (WordBreak only), so titles are drawn by hand below.
     private const TextFormatFlags TitleFlags =
@@ -72,8 +72,11 @@ public partial class Form1 : Form
         workspace.DragEnter += Workspace_DragEnter;
         workspace.DragDrop += Workspace_DragDrop;
         workspace.MouseDown += Workspace_MouseDown;
-
+        workspace.MouseMove += Workspace_MouseMove;
+        workspace.MouseUp += Workspace_MouseUp;
+        workspace.Paint += Workspace_Paint;
         workspace.MouseDoubleClick += Workspace_MouseDoubleClick;
+        typeof(Panel).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(workspace, true);
         page.Controls.Add(workspace);
         page.Tag = tab;
 
@@ -118,10 +121,66 @@ public partial class Form1 : Form
         _board.Dirty();
     }
 
+    private bool _selecting;
+    private Point _selStart;
+    private Rectangle _selRect;
+
     private void Workspace_MouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left || e.Clicks != 1 || sender is not Panel workspace) return;
         ClearHighlights(workspace);
+        _selecting = true;
+        _selStart = e.Location;
+        _selRect = Rectangle.Empty;
+        workspace.Invalidate();
+    }
+
+    private void Workspace_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_selecting || e.Button != MouseButtons.Left || sender is not Panel workspace) return;
+        var old = _selRect;
+        _selRect = SelectionRect(_selStart, e.Location);
+        if (old.Width > 0 && old.Height > 0) workspace.Invalidate(old);
+        if (_selRect.Width > 0 && _selRect.Height > 0) workspace.Invalidate(_selRect);
+        workspace.Update();
+    }
+
+    private void Workspace_MouseUp(object? sender, MouseEventArgs e)
+    {
+        if (!_selecting || e.Button != MouseButtons.Left || sender is not Panel workspace) return;
+        _selecting = false;
+        if (_selRect.Width > 0 && _selRect.Height > 0) workspace.Invalidate(_selRect);
+        if (_selRect.Width > 3 && _selRect.Height > 3)
+            SelectIcons(workspace, _selRect);
+    }
+
+    private void Workspace_Paint(object? sender, PaintEventArgs e)
+    {
+        if (!_selecting || _selRect.Width <= 0 || _selRect.Height <= 0) return;
+        var c = SystemColors.Highlight;
+        using var fill = new SolidBrush(Color.FromArgb(32, c.R, c.G, c.B));
+        using var pen = new Pen(c, 1);
+        e.Graphics.FillRectangle(fill, _selRect);
+        e.Graphics.DrawRectangle(pen, _selRect.X, _selRect.Y, _selRect.Width - 1, _selRect.Height - 1);
+    }
+
+    private static Rectangle SelectionRect(Point a, Point b)
+    {
+        int x = Math.Min(a.X, b.X);
+        int y = Math.Min(a.Y, b.Y);
+        return new Rectangle(x, y, Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+    }
+
+    private static void SelectIcons(Panel workspace, Rectangle rect)
+    {
+        foreach (var panel in workspace.Controls.OfType<Panel>().Where(p => p.Tag is IconItem))
+        {
+            if (!rect.IntersectsWith(panel.Bounds)) continue;
+            var c = SystemColors.Highlight;
+            panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
+            if (panel.Controls.Count > 1 && panel.Controls[1] is Label title)
+                title.ForeColor = SystemColors.WindowText;
+        }
     }
 
 
@@ -141,6 +200,21 @@ public partial class Form1 : Form
         ClearHighlights(workspace);
         var c = SystemColors.Highlight;
         panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
+        title.ForeColor = SystemColors.WindowText;
+    }
+
+    private static void ToggleSelection(Panel panel, Label title)
+    {
+        bool isSelected = panel.BackColor != Color.Transparent;
+        if (isSelected)
+        {
+            panel.BackColor = Color.Transparent;
+        }
+        else
+        {
+            var c = SystemColors.Highlight;
+            panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
+        }
         title.ForeColor = SystemColors.WindowText;
     }
 
@@ -326,6 +400,8 @@ public partial class Form1 : Form
             Cursor = Cursors.Hand,
             Tag = item
         };
+        typeof(Panel).GetProperty("DoubleBuffered",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(panel, true);
 
         var icon = new Label
         {
@@ -369,36 +445,51 @@ public partial class Form1 : Form
         menu.Items.Add("Delete", null, (s, e) => DeleteIcon(workspace, item, panel));
         panel.ContextMenuStrip = menu;
 
-        Label? ghost = null;
-        var start = Point.Empty;
+        List<(Panel p, IconItem i, Point s, Label g)>? dragGroup = null;
         WireDrag(new Control[] { panel, icon, title },
             onDragStart: () =>
             {
-                start = panel.Location;
-                ghost = CreateDragGhost(panel);
-                ghost.Location = start;
-                SelectIcon(workspace, panel, title);
-                panel.BringToFront();
-                workspace.Controls.Add(ghost);
-                ghost.BringToFront();
+                // Only clear selection if this icon wasn't already selected
+                if (panel.BackColor == Color.Transparent)
+                    SelectIcon(workspace, panel, title);
+                // Create ghosts for all selected icons and send originals behind them
+                dragGroup = workspace.Controls.OfType<Panel>()
+                    .Where(p => p.Tag is IconItem && p.BackColor != Color.Transparent)
+                    .Select(p =>
+                    {
+                        var g = CreateDragGhost(p);
+                        g.Location = p.Location;
+                        workspace.Controls.Add(g);
+                        g.BringToFront();
+                        p.SendToBack();
+                        return (p, (IconItem)p.Tag!, p.Location, g);
+                    })
+                    .ToList();
             },
             onDrag: (dx, dy) =>
             {
-                if (ghost is null) return;
-                ghost.Location = Clamp(workspace, ghost.Size,
-                    new Point(start.X + dx, start.Y + dy));
+                if (dragGroup is null) return;
+                foreach (var (_, _, gs, g) in dragGroup)
+                    g.Location = Clamp(workspace, g.Size,
+                        new Point(gs.X + dx, gs.Y + dy));
             },
             onClick: () =>
             {
-                DisposeDragGhost(ghost, workspace);
-                ghost = null;
-                SelectIcon(workspace, panel, title);
-                panel.BringToFront();
+                if (dragGroup is not null)
+                    foreach (var (_, _, _, g) in dragGroup)
+                        DisposeDragGhost(g, workspace);
+                dragGroup = null;
+                if ((Control.ModifierKeys & Keys.Control) != 0)
+                    ToggleSelection(panel, title);
+                else
+                    SelectIcon(workspace, panel, title);
             },
             onDoubleClick: () =>
             {
-                DisposeDragGhost(ghost, workspace);
-                ghost = null;
+                if (dragGroup is not null)
+                    foreach (var (_, _, _, g) in dragGroup)
+                        DisposeDragGhost(g, workspace);
+                dragGroup = null;
                 if (!ItemExists(item.Path))
                 {
                     MessageBox.Show(
@@ -412,13 +503,16 @@ public partial class Form1 : Form
             },
             onDragEnd: () =>
             {
-                if (ghost is null) return;
-                panel.Location = SnapToGrid(workspace, ghost.Size, ghost.Location);
-                item.X = panel.Left;
-                item.Y = panel.Top;
-                panel.BringToFront();
-                DisposeDragGhost(ghost, workspace);
-                ghost = null;
+                if (dragGroup is null) return;
+                foreach (var (gp, gi, gs, g) in dragGroup)
+                {
+                    gp.Location = SnapToGrid(workspace, gp.Size, g.Location);
+                    gi.X = gp.Left;
+                    gi.Y = gp.Top;
+                }
+                foreach (var (_, _, _, g) in dragGroup)
+                    DisposeDragGhost(g, workspace);
+                dragGroup = null;
                 _board.Dirty();
             });
 
