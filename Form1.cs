@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Drawing.Imaging;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace DropFolders;
 
@@ -14,6 +17,8 @@ public partial class Form1 : Form
     private const TextFormatFlags TitleFlags =
         TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl |
         TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPrefix;
+
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
     private readonly string _stateFile;
     private readonly string _stateBak;
@@ -91,32 +96,103 @@ public partial class Form1 : Form
     private static Panel WorkspaceFromPage(TabPage page) => (Panel)page.Controls[0];
     private static Tab TabFromPage(TabPage page) => (Tab)page.Tag!;
     private static Tab TabFromSelected(TabControl tc) => (Tab)tc.SelectedTab!.Tag!;
-    private static bool ItemExists(string path) => Directory.Exists(path) || File.Exists(path);
+    private static bool ItemExists(string path) => Directory.Exists(path) || File.Exists(path) || IsUrl(path);
+
+    private static string? ExtractUrlTitle(IDataObject data, string url)
+    {
+        if (data.GetDataPresent(DataFormats.Html))
+        {
+            var html = ((string?)data.GetData(DataFormats.Html)) ?? "";
+            var htmlIdx = html.IndexOf("<html", StringComparison.OrdinalIgnoreCase);
+            if (htmlIdx >= 0) html = html[htmlIdx..];
+            var title = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (title.Success && !string.IsNullOrWhiteSpace(title.Groups[1].Value))
+                return WebUtility.HtmlDecode(title.Groups[1].Value.Trim());
+            var link = Regex.Match(html, @"<a[^>]*>(.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (link.Success)
+            {
+                var text = WebUtility.HtmlDecode(link.Groups[1].Value.Trim());
+                if (!string.IsNullOrWhiteSpace(text) && !string.Equals(text, url, StringComparison.OrdinalIgnoreCase))
+                    return text;
+            }
+        }
+        foreach (var fmt in new[] { "text/x-moz-url", "text/x-moz-url-desc", "chromium/x-page-title" })
+        {
+            if (!data.GetDataPresent(fmt)) continue;
+            var raw = data.GetData(fmt)?.ToString() ?? "";
+            var lines = raw.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length >= 2)
+            {
+                var candidate = lines[1].Trim();
+                if (!string.IsNullOrWhiteSpace(candidate) && !IsUrl(candidate))
+                    return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static bool IsUrl(string path) =>
+        path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeUrl(string url) =>
+        url.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            ? "https://" + url
+            : url;
 
     private void Workspace_DragEnter(object? sender, DragEventArgs e)
     {
-        if (e.Data is null || !e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-        var files = (string[]?)e.Data.GetData(DataFormats.FileDrop) ?? Array.Empty<string>();
-        if (files.Any(ItemExists))
-            e.Effect = DragDropEffects.Link;
+        if (e.Data is null) return;
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            var files = (string[]?)e.Data.GetData(DataFormats.FileDrop) ?? Array.Empty<string>();
+            if (files.Any(ItemExists))
+                e.Effect = DragDropEffects.Link;
+        }
+        else if (e.Data.GetDataPresent(DataFormats.Text) || e.Data.GetDataPresent(DataFormats.Html))
+        {
+            var text = (string?)e.Data.GetData(DataFormats.Text) ?? "";
+            if (IsUrl(text))
+                e.Effect = DragDropEffects.Link;
+        }
     }
 
     private void Workspace_DragDrop(object? sender, DragEventArgs e)
     {
-        if (sender is not Panel workspace || e.Data is null || !e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-        var files = (string[]?)e.Data.GetData(DataFormats.FileDrop) ?? Array.Empty<string>();
+        if (sender is not Panel workspace || e.Data is null) return;
         var dropPoint = workspace.PointToClient(new Point(e.X, e.Y));
         var tab = TabFromSelected(tabs);
 
         int i = 0;
-        foreach (var path in files.Where(ItemExists))
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            var loc = SnapToGrid(workspace, new Size(110, 90),
-                new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
-            var item = new IconItem(path, loc.X, loc.Y, null);
-            tab.Items.Add(item);
-            CreateIconView(workspace, item);
-            i++;
+            var files = (string[]?)e.Data.GetData(DataFormats.FileDrop) ?? Array.Empty<string>();
+            foreach (var path in files.Where(ItemExists))
+            {
+                var loc = SnapToGrid(workspace, new Size(110, 90),
+                    new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
+                var item = new IconItem(path, loc.X, loc.Y, null);
+                tab.Items.Add(item);
+                CreateIconView(workspace, item);
+                i++;
+            }
+        }
+        else if (e.Data.GetDataPresent(DataFormats.Text) || e.Data.GetDataPresent(DataFormats.Html))
+        {
+            var text = (string?)e.Data.GetData(DataFormats.Text) ?? "";
+            if (IsUrl(text))
+            {
+                var url = NormalizeUrl(text);
+                var label = ExtractUrlTitle(e.Data, url);
+                var loc = SnapToGrid(workspace, new Size(110, 90),
+                    new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
+                var item = new IconItem(url, loc.X, loc.Y, label);
+                tab.Items.Add(item);
+                var p = CreateIconView(workspace, item);
+                if (label is null && p.Controls[1] is Label titleLabel)
+                    _ = FetchUrlTitleAsync(url, item, titleLabel, p);
+            }
         }
         _board.Dirty();
     }
@@ -378,7 +454,7 @@ public partial class Form1 : Form
         ghost.Dispose();
     }
 
-    private void CreateIconView(Panel workspace, IconItem item)
+    private Panel CreateIconView(Panel workspace, IconItem item)
     {
         var fileName = Path.GetFileName(item.Path);
         var displayName = string.IsNullOrWhiteSpace(item.Label)
@@ -517,14 +593,35 @@ public partial class Form1 : Form
             });
 
         workspace.Controls.Add(panel);
+        return panel;
     }
 
-    private void RenameIcon(IconItem item, Label title, Panel panel)
+    private async Task FetchUrlTitleAsync(string url, IconItem item, Label title, Panel panel)
     {
-        var newLabel = Prompt("Rename icon", "Rename icon:", item.Label ?? Path.GetFileName(item.Path));
+        string? newLabel = null;
+        try
+        {
+            var html = await _http.GetStringAsync(url).ConfigureAwait(false);
+            var match = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (match.Success) newLabel = WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
+        }
+        catch { return; }
         if (string.IsNullOrWhiteSpace(newLabel)) return;
-        item.Label = newLabel;
+        try
+        {
+            panel.Invoke(() =>
+            {
+                if (panel.IsDisposed) return;
+                UpdateIconLabel(item, title, panel, newLabel!);
+                _board.Dirty();
+            });
+        }
+        catch { }
+    }
 
+    private static void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
+    {
+        item.Label = newLabel;
         const int labelWidth = 110;
         var size = TextRenderer.MeasureText(
             newLabel, TitleFont,
@@ -534,6 +631,13 @@ public partial class Form1 : Form
         title.Size = new Size(labelWidth, size.Height);
         panel.Size = new Size(labelWidth, 6 + 42 + size.Height + 6);
         title.Invalidate();
+    }
+
+    private void RenameIcon(IconItem item, Label title, Panel panel)
+    {
+        var newLabel = Prompt("Rename icon", "Rename icon:", item.Label ?? Path.GetFileName(item.Path));
+        if (string.IsNullOrWhiteSpace(newLabel)) return;
+        UpdateIconLabel(item, title, panel, newLabel);
         _board.Dirty();
     }
 
@@ -655,6 +759,18 @@ public partial class Form1 : Form
 
     private static Bitmap GetIconBitmap(string path, bool isFolder)
     {
+        if (IsUrl(path))
+        {
+            using var urlIcon = FindChrome() is string chrome ? Icon.ExtractAssociatedIcon(chrome) : SystemIcons.Information;
+            var bmp = new Bitmap(42, 42);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                if (urlIcon is not null)
+                    g.DrawImage(urlIcon.ToBitmap(), 0, 0, 42, 42);
+            }
+            return bmp;
+        }
         const uint SHGFI_ICON = 0x100;
         const uint SHGFI_LARGEICON = 0x0;
 
@@ -774,12 +890,34 @@ public partial class Form1 : Form
     {
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            if (IsUrl(path) && FindChrome() is string chrome)
+            {
+                Process.Start(new ProcessStartInfo(chrome, $"\"{path}\"") { UseShellExecute = false });
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
         }
         catch (Exception ex)
         {
             MessageBox.Show(ex.Message, "Could not open item", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private static string? FindChrome()
+    {
+        foreach (var basePath in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        })
+        {
+            var chrome = Path.Combine(basePath, "Google", "Chrome", "Application", "chrome.exe");
+            if (File.Exists(chrome)) return chrome;
+        }
+        return null;
     }
 
     // ---------- prompt ----------
