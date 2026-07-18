@@ -8,6 +8,7 @@ namespace DropFolders;
 public partial class Form1 : Form
 {
     private static readonly Font TitleFont = new("Segoe UI", 10);
+    private const int GridSize = 58;
     // EditControl: break on hyphens and hard-break words longer than the line.
     // Label paints with its own flags (WordBreak only), so titles are drawn by hand below.
     private const TextFormatFlags TitleFlags =
@@ -71,6 +72,7 @@ public partial class Form1 : Form
         workspace.DragEnter += Workspace_DragEnter;
         workspace.DragDrop += Workspace_DragDrop;
         workspace.MouseDown += Workspace_MouseDown;
+
         workspace.MouseDoubleClick += Workspace_MouseDoubleClick;
         page.Controls.Add(workspace);
         page.Tag = tab;
@@ -103,12 +105,11 @@ public partial class Form1 : Form
         var dropPoint = workspace.PointToClient(new Point(e.X, e.Y));
         var tab = TabFromSelected(tabs);
 
-        const int step = 115;
         int i = 0;
         foreach (var path in files.Where(ItemExists))
         {
-            var loc = Clamp(workspace, new Size(110, 90),
-                new Point(dropPoint.X + i % 3 * step, dropPoint.Y + i / 3 * step));
+            var loc = SnapToGrid(workspace, new Size(110, 90),
+                new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
             var item = new IconItem(path, loc.X, loc.Y, null);
             tab.Items.Add(item);
             CreateIconView(workspace, item);
@@ -119,9 +120,11 @@ public partial class Form1 : Form
 
     private void Workspace_MouseDown(object? sender, MouseEventArgs e)
     {
-        if (e.Button != MouseButtons.Left || sender is not Panel workspace) return;
+        if (e.Button != MouseButtons.Left || e.Clicks != 1 || sender is not Panel workspace) return;
         ClearHighlights(workspace);
     }
+
+
 
     private static void ClearHighlights(Panel workspace)
     {
@@ -410,7 +413,7 @@ public partial class Form1 : Form
             onDragEnd: () =>
             {
                 if (ghost is null) return;
-                panel.Location = ghost.Location;
+                panel.Location = SnapToGrid(workspace, ghost.Size, ghost.Location);
                 item.X = panel.Left;
                 item.Y = panel.Top;
                 panel.BringToFront();
@@ -545,6 +548,13 @@ public partial class Form1 : Form
         int x = Math.Max(0, Math.Min(p.X, Math.Max(0, r.Width - size.Width)));
         int y = Math.Max(0, Math.Min(p.Y, Math.Max(0, r.Height - size.Height)));
         return new Point(x, y);
+    }
+
+    private static Point SnapToGrid(Panel workspace, Size size, Point p)
+    {
+        int x = (int)Math.Round((double)p.X / GridSize) * GridSize;
+        int y = (int)Math.Round((double)p.Y / GridSize) * GridSize;
+        return Clamp(workspace, size, new Point(x, y));
     }
 
     // ---------- shell icons ----------
