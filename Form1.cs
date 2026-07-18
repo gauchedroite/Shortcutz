@@ -566,7 +566,9 @@ public partial class Form1 : Form
             return new Bitmap(32, 32);
 
         using var icon = Icon.FromHandle(shinfo.hIcon);
-        var bitmap = new Bitmap(icon.ToBitmap(), new Size(48, 48));
+        var bitmap = new Bitmap(48, 48, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(bitmap))
+            g.DrawImage(icon.ToBitmap(), 0, 0, 48, 48);
         DestroyIcon(shinfo.hIcon);
         return bitmap;
     }
