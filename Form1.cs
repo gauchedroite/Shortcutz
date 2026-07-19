@@ -20,6 +20,8 @@ public partial class Form1 : Form
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
+    private const string AppDataDirName = "Shortcutz";
+
     private readonly string _stateFile;
     private readonly string _stateBak;
     private readonly ContextMenuStrip _tabMenu;
@@ -43,7 +45,7 @@ public partial class Form1 : Form
 
         _stateFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "DropFolders", "state.json");
+            AppDataDirName, "state.json");
         _stateBak = _stateFile + ".bak";
         Directory.CreateDirectory(Path.GetDirectoryName(_stateFile)!);
 
@@ -53,6 +55,44 @@ public partial class Form1 : Form
 
         _board.Changed += SaveState;
         FormClosing += (s, e) => SaveState();
+        KeyPreview = true;
+        KeyDown += Form1_KeyDown;
+    }
+
+    private void Form1_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.R && e.Control)
+        {
+            e.Handled = true;
+            ReloadState();
+            return;
+        }
+        if (e.KeyCode == Keys.Delete)
+        {
+            e.Handled = true;
+            if (tabs.SelectedTab is TabPage page)
+                DeleteSelectedIcons(WorkspaceFromPage(page));
+        }
+    }
+
+    private void ReloadState()
+    {
+        _board.Changed -= SaveState;
+        try
+        {
+            foreach (TabPage page in tabs.TabPages.Cast<TabPage>().ToList())
+            {
+                var workspace = WorkspaceFromPage(page);
+                foreach (Control c in workspace.Controls) DisposeItemControl(c);
+            }
+            tabs.TabPages.Clear();
+            _board.Tabs.Clear();
+            LoadState();
+        }
+        finally
+        {
+            _board.Changed += SaveState;
+        }
     }
 
     // ---------- tabs ----------
@@ -489,6 +529,27 @@ public partial class Form1 : Form
             ImageAlign = ContentAlignment.MiddleCenter,
             Text = ""
         };
+        if (IsUrl(item.Path))
+        {
+            var cache = GetFaviconCachePath(item.Path);
+            if (File.Exists(cache))
+            {
+                try
+                {
+                    var cached = LoadFaviconBitmap(cache);
+                    if (cached is not null)
+                    {
+                        icon.Image?.Dispose();
+                        icon.Image = cached;
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                _ = FetchUrlFaviconAsync(item.Path, panel, icon);
+            }
+        }
 
         var title = new Label
         {
@@ -518,7 +579,13 @@ public partial class Form1 : Form
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Rename", null, (s, e) => RenameIcon(item, title, panel));
-        menu.Items.Add("Delete", null, (s, e) => DeleteIcon(workspace, item, panel));
+        menu.Items.Add("Delete", null, (s, e) =>
+        {
+            if (panel.BackColor != Color.Transparent)
+                DeleteSelectedIcons(workspace);
+            else
+                DeleteIcon(workspace, item, panel);
+        });
         panel.ContextMenuStrip = menu;
 
         List<(Panel p, IconItem i, Point s, Label g)>? dragGroup = null;
@@ -619,6 +686,83 @@ public partial class Form1 : Form
         catch { }
     }
 
+    private async Task FetchUrlFaviconAsync(string url, Panel panel, Label icon)
+    {
+        var cache = GetFaviconCachePath(url);
+        if (File.Exists(cache))
+        {
+            try
+            {
+                var cached = LoadFaviconBitmap(cache);
+                if (cached is not null)
+                {
+                    panel.Invoke(() =>
+                    {
+                        if (panel.IsDisposed) return;
+                        var old = icon.Image;
+                        icon.Image = cached;
+                        old?.Dispose();
+                    });
+                }
+                return;
+            }
+            catch { }
+        }
+        try
+        {
+            var domain = new Uri(url).Host;
+            var faviconUrl = $"https://www.google.com/s2/favicons?domain={domain}&sz=64";
+            var bytes = await _http.GetByteArrayAsync(faviconUrl).ConfigureAwait(false);
+            try { await File.WriteAllBytesAsync(cache, bytes); } catch { }
+            using var ms = new MemoryStream(bytes);
+            using var source = Image.FromStream(ms);
+            var bmp = new Bitmap(42, 42);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(source, 0, 0, 42, 42);
+            }
+            panel.Invoke(() =>
+            {
+                if (panel.IsDisposed) return;
+                var old = icon.Image;
+                icon.Image = bmp;
+                old?.Dispose();
+            });
+        }
+        catch { }
+    }
+
+    private static string GetFaviconCachePath(string url)
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            AppDataDirName, "icons");
+        Directory.CreateDirectory(dir);
+        var hash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(url)))[..16];
+        return Path.Combine(dir, hash + ".png");
+    }
+
+    private static void DeleteFaviconCache(string url)
+    {
+        try { File.Delete(GetFaviconCachePath(url)); } catch { }
+    }
+
+    private static Bitmap? LoadFaviconBitmap(string path)
+    {
+        using var ms = new FileStream(path, FileMode.Open, FileAccess.Read);
+        using var source = Image.FromStream(ms);
+        var bmp = new Bitmap(42, 42);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.DrawImage(source, 0, 0, 42, 42);
+        }
+        return bmp;
+    }
+
     private static void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
     {
         item.Label = newLabel;
@@ -648,8 +792,40 @@ public partial class Form1 : Form
         workspace.Controls.Remove(panel);
         TabFromSelected(tabs).Items.Remove(item);
         DisposeItemControl(panel);
+        DeleteFaviconCache(item.Path);
         _board.Dirty();
     }
+
+    private void DeleteSelectedIcons(Panel workspace)
+    {
+        var selected = workspace.Controls.OfType<Panel>()
+            .Where(p => p.Tag is IconItem && p.BackColor != Color.Transparent)
+            .ToList();
+        if (selected.Count == 0) return;
+
+        var message = selected.Count == 1
+            ? $"Remove '{GetIconDisplayName((IconItem)selected[0].Tag!)}' from the board?"
+            : $"Remove {selected.Count} selected icons from the board?";
+        var detail = selected.All(p => ItemExists(((IconItem)p.Tag!).Path))
+            ? "\n\nThe original files/folders will not be affected."
+            : "";
+        if (MessageBox.Show(message + detail, "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        var tab = TabFromSelected(tabs);
+        foreach (var p in selected)
+        {
+            var iconItem = (IconItem)p.Tag!;
+            workspace.Controls.Remove(p);
+            tab.Items.Remove(iconItem);
+            DisposeItemControl(p);
+            DeleteFaviconCache(iconItem.Path);
+        }
+        _board.Dirty();
+    }
+
+    private static string GetIconDisplayName(IconItem item) =>
+        item.Label ?? Path.GetFileName(item.Path) ?? item.Path;
 
     private void CreateNoteView(Panel workspace, NoteItem item)
     {
