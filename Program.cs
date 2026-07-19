@@ -1,10 +1,10 @@
 using System.Threading;
 
-namespace DropFolders;
+namespace Shortcutz;
 
 static class Program
 {
-    private const string MutexName = "DropFolders_SingleInstance_b3c9a1d2";
+    private const string MutexName = "Shortcutz_SingleInstance_b3c9a1d2";
 
     /// <summary>
     ///  The main entry point for the application.

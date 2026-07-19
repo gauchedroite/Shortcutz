@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace DropFolders;
+namespace Shortcutz;
 
 public partial class Form1 : Form
 {
@@ -72,7 +72,7 @@ public partial class Form1 : Form
         
         tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
 
-        try { LoadState(); } catch (Exception ex) { File.WriteAllText(Path.Combine(Path.GetDirectoryName(_stateFile)!, "error.log"), ex.ToString()); throw; }
+        LoadState();
         showGridItem.Checked = _showGridDots;
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
@@ -102,6 +102,13 @@ public partial class Form1 : Form
             e.Handled = true;
             if (tabs.SelectedTab is TabPage page)
                 DeleteSelectedItems(WorkspaceFromPage(page));
+            return;
+        }
+        if (e.KeyCode == Keys.F2)
+        {
+            e.Handled = true;
+            if (tabs.SelectedTab is TabPage page)
+                RenameSelected(WorkspaceFromPage(page));
             return;
         }
         if (e.Control)
@@ -391,13 +398,11 @@ public partial class Form1 : Form
 
     private static void DrawGridDots(Graphics g, Panel workspace)
     {
-        var grid = (int)(GridSize * 1f); // shown at base grid
-        if (grid <= 0) grid = GridSize;
         using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
         const int r = 1;
         var bounds = workspace.ClientRectangle;
-        for (int x = 0; x < bounds.Width; x += grid)
-            for (int y = 0; y < bounds.Height; y += grid)
+        for (int x = 0; x < bounds.Width; x += GridSize)
+            for (int y = 0; y < bounds.Height; y += GridSize)
                 g.FillEllipse(brush, x - r, y - r, r * 2, r * 2);
     }
 
@@ -538,7 +543,7 @@ public partial class Form1 : Form
                 doubleClick = false;
                 dragging = false;
                 dragOffset = e.Location;
-                c.BringToFront();
+                controls[0].BringToFront();
                 c.Capture = true;
             };
             c.MouseMove += (s, e) =>
@@ -677,7 +682,11 @@ public partial class Form1 : Form
 
         var original = icon.Tag as Image ?? icon.Image;
         if (original is not null)
+        {
+            var old = icon.Image;
             icon.Image = ScaleBitmap(original, icon.Size);
+            if (old is not null && old != original) old.Dispose();
+        }
 
         title.Size = new Size(labelWidth, titleSize.Height);
         title.Location = new Point(0, (int)(48 * _zoom));
@@ -869,6 +878,7 @@ public partial class Form1 : Form
                     c.Location = SnapToGrid(workspace, c.Size, g.Location);
                     i.X = (int)(c.Left / _zoom);
                     i.Y = (int)(c.Top / _zoom);
+                    c.BringToFront();
                 }
                 foreach (var (_, _, _, g) in dragGroup)
                     DisposeDragGhost(g, workspace);
@@ -949,9 +959,9 @@ public partial class Form1 : Form
         }
         try
         {
-            var domain = new Uri(url).Host;
-            var faviconUrl = $"https://www.google.com/s2/favicons?domain={domain}&sz=64";
-            var bytes = await _http.GetByteArrayAsync(faviconUrl).ConfigureAwait(false);
+            var baseUri = new Uri(url);
+            var bytes = await DownloadFaviconAsync(baseUri).ConfigureAwait(false);
+            if (bytes is null) return;
             try { await File.WriteAllBytesAsync(cache, bytes); } catch { }
             using var ms = new MemoryStream(bytes);
             using var source = Image.FromStream(ms);
@@ -966,6 +976,95 @@ public partial class Form1 : Form
             });
         }
         catch { }
+    }
+
+    // Favicon ladder: the page's own <link rel="icon"> (handles subdomain /
+    // SVG-only sites S2 misses, e.g. fms.yukon.ca -> favicon.svg), then the
+    // conventional /favicon.ico, then Google faviconV2 (renders SVG server-side,
+    // more reliable than the old s2 endpoint), then legacy s2 per apex walk.
+    private async Task<byte[]?> DownloadFaviconAsync(Uri baseUri)
+    {
+        // 1. <link rel="*icon*"> declared in the page HTML
+        string? html = null;
+        try { html = await _http.GetStringAsync(baseUri).ConfigureAwait(false); }
+        catch { }
+        if (html is not null)
+        {
+            foreach (var href in ExtractIconLinks(html))
+            {
+                var data = await TryGetImageAsync(new Uri(baseUri, href)).ConfigureAwait(false);
+                if (data is not null) return data;
+            }
+        }
+
+        // 2. Conventional /favicon.ico
+        {
+            var data = await TryGetImageAsync(new Uri(baseUri, "/favicon.ico")).ConfigureAwait(false);
+            if (data is not null) return data;
+        }
+
+        // 3. Google faviconV2 — fetches and renders the declared icon (incl. SVG)
+        {
+            var v2 = new Uri($"https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url={Uri.EscapeDataString(baseUri.AbsoluteUri)}&size=64");
+            var data = await TryGetImageAsync(v2).ConfigureAwait(false);
+            if (data is not null) return data;
+        }
+
+        // 4. Legacy s2, walking subdomain -> apex
+        var domain = baseUri.Host;
+        while (domain is not null)
+        {
+            var data = await TryGetImageAsync(
+                new Uri($"https://www.google.com/s2/favicons?domain={domain}&sz=64")).ConfigureAwait(false);
+            if (data is not null) return data;
+            domain = ParentDomain(domain);
+        }
+        return null;
+    }
+
+    // Download bytes and verify GDI+ can decode them — rejects SVG/WebP that
+    // Image.FromStream cannot read, so the ladder just tries the next candidate.
+    private async Task<byte[]?> TryGetImageAsync(Uri uri)
+    {
+        try
+        {
+            var bytes = await _http.GetByteArrayAsync(uri).ConfigureAwait(false);
+            using var ms = new MemoryStream(bytes);
+            using var img = Image.FromStream(ms);
+            return bytes;
+        }
+        catch { return null; }
+    }
+
+    // <link rel="*icon*"> hrefs, best decodable first. SVG goes last because
+    // GDI+ can't render it (it'll be tried, fail decode, and the ladder moves on).
+    private static IEnumerable<string> ExtractIconLinks(string html)
+    {
+        var found = new List<(int priority, string href)>();
+        foreach (Match m in Regex.Matches(html, @"<link\b[^>]*>", RegexOptions.IgnoreCase))
+        {
+            var tag = m.Value;
+            var rel = Regex.Match(tag, @"rel\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+            if (!rel.Success || !rel.Groups[1].Value.Contains("icon", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var href = Regex.Match(tag, @"href\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+            if (!href.Success) continue;
+            var h = href.Groups[1].Value;
+            var priority = h.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? 3
+                         : rel.Groups[1].Value.Contains("apple", StringComparison.OrdinalIgnoreCase) ? 0
+                         : h.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? 1
+                         : 2;
+            found.Add((priority, h));
+        }
+        return found.OrderBy(x => x.priority).Select(x => x.href);
+    }
+
+    // ponytail: naive apex walk — "fms.yukon.ca" -> "yukon.ca" -> null.
+    // Stops before the TLD; does not handle co.uk-style country SLDs.
+    private static string? ParentDomain(string host)
+    {
+        var parts = host.Split('.');
+        return parts.Length >= 3 ? string.Join('.', parts.Skip(1)) : null;
     }
 
     private static string GetFaviconCachePath(string url)
@@ -1018,6 +1117,31 @@ public partial class Form1 : Form
         if (string.IsNullOrWhiteSpace(newLabel)) return;
         UpdateIconLabel(item, title, panel, newLabel);
         _board.Dirty();
+    }
+
+    private void RenameNote(NoteItem item, Label note)
+    {
+        var newText = Prompt("Edit note", "Edit note:", item.Text);
+        if (string.IsNullOrWhiteSpace(newText)) return;
+        item.Text = newText;
+        note.Text = newText;
+        _board.Dirty();
+    }
+
+    private void RenameSelected(Panel workspace)
+    {
+        var sel = workspace.Controls.OfType<Control>().FirstOrDefault(IsSelected);
+        if (sel is null) return;
+        switch (sel.Tag)
+        {
+            case IconItem ii when sel is Panel p:
+                var title = p.Controls.OfType<Label>().First(l => l.Tag is string);
+                RenameIcon(ii, title, p);
+                break;
+            case NoteItem ni when sel is Label note:
+                RenameNote(ni, note);
+                break;
+        }
     }
 
     private void DeleteIcon(Panel workspace, IconItem item, Panel panel)
@@ -1079,14 +1203,7 @@ public partial class Form1 : Form
             Tag = item
         };
 
-        void EditNote()
-        {
-            var newText = Prompt("Edit note", "Edit note:", item.Text);
-            if (string.IsNullOrWhiteSpace(newText)) return;
-            item.Text = newText;
-            note.Text = newText;
-            _board.Dirty();
-        }
+        void EditNote() => RenameNote(item, note);
 
         List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
         WireDrag(new[] { note },
@@ -1134,6 +1251,7 @@ public partial class Form1 : Form
                     c.Location = SnapToGrid(workspace, c.Size, g.Location);
                     i.X = (int)(c.Left / _zoom);
                     i.Y = (int)(c.Top / _zoom);
+                    c.BringToFront();
                 }
                 foreach (var (_, _, _, g) in dragGroup)
                     DisposeDragGhost(g, workspace);
@@ -1346,7 +1464,9 @@ public partial class Form1 : Form
         {
             if (IsUrl(path) && FindChrome() is string chrome)
             {
-                Process.Start(new ProcessStartInfo(chrome, $"\"{path}\"") { UseShellExecute = false });
+                var psi = new ProcessStartInfo(chrome) { UseShellExecute = false };
+                psi.ArgumentList.Add(path);
+                Process.Start(psi);
             }
             else
             {

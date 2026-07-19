@@ -29,3 +29,6 @@ x86/
 
 ## Logs
 *.log
+
+## Misc
+nul

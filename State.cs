@@ -1,4 +1,4 @@
-namespace DropFolders;
+namespace Shortcutz;
 
 // Serialization DTOs
 public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null);

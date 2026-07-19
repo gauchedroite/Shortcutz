@@ -1,4 +1,4 @@
-namespace DropFolders;
+namespace Shortcutz;
 
 // Replaces Microsoft.VisualBasic.Interaction.InputBox with a native WinForms prompt.
 public sealed class PromptForm : Form
