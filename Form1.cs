@@ -121,7 +121,7 @@ public partial class Form1 : Form
         workspace.MouseUp += Workspace_MouseUp;
         workspace.Paint += Workspace_Paint;
         workspace.MouseDoubleClick += Workspace_MouseDoubleClick;
-        typeof(Panel).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(workspace, true);
+        SetDoubleBuffered(workspace);
         page.Controls.Add(workspace);
         page.Tag = tab;
 
@@ -145,9 +145,8 @@ public partial class Form1 : Form
             var html = ((string?)data.GetData(DataFormats.Html)) ?? "";
             var htmlIdx = html.IndexOf("<html", StringComparison.OrdinalIgnoreCase);
             if (htmlIdx >= 0) html = html[htmlIdx..];
-            var title = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (title.Success && !string.IsNullOrWhiteSpace(title.Groups[1].Value))
-                return WebUtility.HtmlDecode(title.Groups[1].Value.Trim());
+            var title = ExtractTitleFromHtml(html);
+            if (title is not null) return title;
             var link = Regex.Match(html, @"<a[^>]*>(.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
             if (link.Success)
             {
@@ -169,6 +168,13 @@ public partial class Form1 : Form
             }
         }
         return null;
+    }
+
+    private static string? ExtractTitleFromHtml(string html)
+    {
+        var match = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (!match.Success || string.IsNullOrWhiteSpace(match.Groups[1].Value)) return null;
+        return WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
     }
 
     private static bool IsUrl(string path) =>
@@ -409,7 +415,7 @@ public partial class Form1 : Form
 
     // Shared drag logic for any draggable control (and its child subcontrols that
     // should all act as one draggable region, e.g. icon panel + icon + title).
-    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null)
+    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action<Control>? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null)
     {
         bool dragging = false;
         bool doubleClick = false;
@@ -422,7 +428,7 @@ public partial class Form1 : Form
                 if (e.Clicks == 2)
                 {
                     doubleClick = true;
-                    onDoubleClick?.Invoke();
+                    onDoubleClick?.Invoke(c);
                     return;
                 }
                 doubleClick = false;
@@ -516,8 +522,7 @@ public partial class Form1 : Form
             Cursor = Cursors.Hand,
             Tag = item
         };
-        typeof(Panel).GetProperty("DoubleBuffered",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(panel, true);
+        SetDoubleBuffered(panel);
 
         var icon = new Label
         {
@@ -525,7 +530,6 @@ public partial class Form1 : Form
             Size = new Size(60, 42),
             Location = new Point((labelWidth - 60) / 2, 6),
             BackColor = Color.Transparent,
-            Image = GetIconBitmap(item.Path, Directory.Exists(item.Path)),
             ImageAlign = ContentAlignment.MiddleCenter,
             Text = ""
         };
@@ -534,21 +538,17 @@ public partial class Form1 : Form
             var cache = GetFaviconCachePath(item.Path);
             if (File.Exists(cache))
             {
-                try
-                {
-                    var cached = LoadFaviconBitmap(cache);
-                    if (cached is not null)
-                    {
-                        icon.Image?.Dispose();
-                        icon.Image = cached;
-                    }
-                }
-                catch { }
+                try { icon.Image = LoadFaviconBitmap(cache); } catch { }
             }
-            else
+            if (icon.Image is null)
             {
+                icon.Image = GetIconBitmap(item.Path, false); // chrome placeholder until favicon loads
                 _ = FetchUrlFaviconAsync(item.Path, panel, icon);
             }
+        }
+        else
+        {
+            icon.Image = GetIconBitmap(item.Path, Directory.Exists(item.Path));
         }
 
         var title = new Label
@@ -627,12 +627,14 @@ public partial class Form1 : Form
                 else
                     SelectIcon(workspace, panel, title);
             },
-            onDoubleClick: () =>
+            onDoubleClick: ctrl =>
             {
                 if (dragGroup is not null)
                     foreach (var (_, _, _, g) in dragGroup)
                         DisposeDragGhost(g, workspace);
                 dragGroup = null;
+                if (title.RectangleToScreen(title.ClientRectangle).Contains(Cursor.Position))
+                    return; // title double-click handled by manual detector below
                 if (!ItemExists(item.Path))
                 {
                     MessageBox.Show(
@@ -659,6 +661,27 @@ public partial class Form1 : Form
                 _board.Dirty();
             });
 
+        // Labels don't reliably synthesize WM_LBUTTONDBLCLK, so detect title double-click manually.
+        DateTime lastTitleUp = DateTime.MinValue;
+        Point lastTitleUpPos = Point.Empty;
+        title.MouseUp += (s, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            var now = DateTime.UtcNow;
+            if ((now - lastTitleUp).TotalMilliseconds <= SystemInformation.DoubleClickTime
+                && Math.Abs(e.X - lastTitleUpPos.X) <= SystemInformation.DoubleClickSize.Width
+                && Math.Abs(e.Y - lastTitleUpPos.Y) <= SystemInformation.DoubleClickSize.Height)
+            {
+                lastTitleUp = DateTime.MinValue;
+                RenameIcon(item, title, panel);
+            }
+            else
+            {
+                lastTitleUp = now;
+                lastTitleUpPos = e.Location;
+            }
+        };
+
         workspace.Controls.Add(panel);
         return panel;
     }
@@ -669,8 +692,7 @@ public partial class Form1 : Form
         try
         {
             var html = await _http.GetStringAsync(url).ConfigureAwait(false);
-            var match = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (match.Success) newLabel = WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
+            newLabel = ExtractTitleFromHtml(html);
         }
         catch { return; }
         if (string.IsNullOrWhiteSpace(newLabel)) return;
@@ -716,12 +738,7 @@ public partial class Form1 : Form
             try { await File.WriteAllBytesAsync(cache, bytes); } catch { }
             using var ms = new MemoryStream(bytes);
             using var source = Image.FromStream(ms);
-            var bmp = new Bitmap(42, 42);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                g.DrawImage(source, 0, 0, 42, 42);
-            }
+            var bmp = ResizeToIcon(source);
             panel.Invoke(() =>
             {
                 if (panel.IsDisposed) return;
@@ -750,17 +767,23 @@ public partial class Form1 : Form
         try { File.Delete(GetFaviconCachePath(url)); } catch { }
     }
 
+    private static void SetDoubleBuffered(Control c) =>
+        typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(c, true);
+
+    private static Bitmap ResizeToIcon(Image source)
+    {
+        var bmp = new Bitmap(42, 42);
+        using var g = Graphics.FromImage(bmp);
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.DrawImage(source, 0, 0, 42, 42);
+        return bmp;
+    }
+
     private static Bitmap? LoadFaviconBitmap(string path)
     {
         using var ms = new FileStream(path, FileMode.Open, FileAccess.Read);
         using var source = Image.FromStream(ms);
-        var bmp = new Bitmap(42, 42);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-            g.DrawImage(source, 0, 0, 42, 42);
-        }
-        return bmp;
+        return ResizeToIcon(source);
     }
 
     private static void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
@@ -845,6 +868,14 @@ public partial class Form1 : Form
 
         Label? ghost = null;
         var start = Point.Empty;
+        void EditNote()
+        {
+            var newText = Prompt("Edit note", "Edit note:", item.Text);
+            if (string.IsNullOrWhiteSpace(newText)) return;
+            item.Text = newText;
+            note.Text = newText;
+            _board.Dirty();
+        }
         WireDrag(new[] { note },
             onDragStart: () =>
             {
@@ -867,6 +898,7 @@ public partial class Form1 : Form
                 ghost = null;
                 note.BringToFront();
             },
+            onDoubleClick: _ => EditNote(),
             onDragEnd: () =>
             {
                 if (ghost is null) return;
@@ -880,14 +912,7 @@ public partial class Form1 : Form
             });
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Edit", null, (s, e) =>
-        {
-            var newText = Prompt("Edit note", "Edit note:", item.Text);
-            if (string.IsNullOrWhiteSpace(newText)) return;
-            item.Text = newText;
-            note.Text = newText;
-            _board.Dirty();
-        });
+        menu.Items.Add("Edit", null, (s, e) => EditNote());
         menu.Items.Add("Delete", null, (s, e) =>
         {
             if (MessageBox.Show(
