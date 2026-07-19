@@ -14,6 +14,7 @@ public sealed class PromptForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
+        TopMost = true; // stay above the always-on-top main window
 
         var lbl = new Label { Text = label, Location = new Point(12, 12), AutoSize = true };
         _box = new TextBox

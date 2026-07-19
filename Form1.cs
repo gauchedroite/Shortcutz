@@ -45,6 +45,7 @@ public partial class Form1 : Form
         Controls.Add(tabs);
         ClientSize = new Size(1000, 650);
         Text = "Shortcutz";
+        TopMost = true; // keep above other apps; PromptForm is also topmost so it stays above this
         ResumeLayout(false);
 
         _tabMenu = new ContextMenuStrip();
