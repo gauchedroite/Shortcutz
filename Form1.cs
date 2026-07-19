@@ -25,8 +25,18 @@ public partial class Form1 : Form
     private readonly string _stateFile;
     private readonly string _stateBak;
     private readonly ContextMenuStrip _tabMenu;
+    private readonly ContextMenuStrip _workspaceMenu;
     private readonly TabControl tabs;
     private readonly Board _board = new();
+    private bool _showGridDots;
+    private float _zoom
+    {
+        get => (tabs.SelectedTab != null) ? TabFromSelected(tabs).Zoom : 1.0f;
+        set { if (tabs.SelectedTab != null) TabFromSelected(tabs).Zoom = value; }
+    }
+    private const float ZoomMin = 0.25f;
+    private const float ZoomMax = 3f;
+    private const float ZoomStep = 0.15f;
 
     public Form1()
     {
@@ -42,14 +52,28 @@ public partial class Form1 : Form
         _tabMenu.Items.Add("Rename", null, RenameTab);
         _tabMenu.Items.Add("Close", null, CloseTab);
         tabs.MouseUp += Tabs_MouseUp;
+        tabs.MouseDoubleClick += Tabs_MouseDoubleClick;
+
+        _workspaceMenu = new ContextMenuStrip();
+        var showGridItem = new ToolStripMenuItem("Show grid dots") { CheckOnClick = true };
+        showGridItem.Click += (s, e) =>
+        {
+            _showGridDots = showGridItem.Checked;
+            if (tabs.SelectedTab is TabPage page)
+                WorkspaceFromPage(page).Invalidate();
+        };
+        _workspaceMenu.Items.Add(showGridItem);
 
         _stateFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             AppDataDirName, "state.json");
         _stateBak = _stateFile + ".bak";
         Directory.CreateDirectory(Path.GetDirectoryName(_stateFile)!);
+        
+        tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
 
-        LoadState();
+        try { LoadState(); } catch (Exception ex) { File.WriteAllText(Path.Combine(Path.GetDirectoryName(_stateFile)!, "error.log"), ex.ToString()); throw; }
+        showGridItem.Checked = _showGridDots;
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
 
@@ -57,6 +81,12 @@ public partial class Form1 : Form
         FormClosing += (s, e) => SaveState();
         KeyPreview = true;
         KeyDown += Form1_KeyDown;
+    }
+
+    private void Tabs_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (tabs.SelectedTab is TabPage page)
+            ApplyZoom(WorkspaceFromPage(page));
     }
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
@@ -71,7 +101,26 @@ public partial class Form1 : Form
         {
             e.Handled = true;
             if (tabs.SelectedTab is TabPage page)
-                DeleteSelectedIcons(WorkspaceFromPage(page));
+                DeleteSelectedItems(WorkspaceFromPage(page));
+            return;
+        }
+        if (e.Control)
+        {
+            if (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add)
+            {
+                e.Handled = true;
+                ZoomIn();
+            }
+            else if (e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract)
+            {
+                e.Handled = true;
+                ZoomOut();
+            }
+            else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
+            {
+                e.Handled = true;
+                ResetZoom();
+            }
         }
     }
 
@@ -116,6 +165,7 @@ public partial class Form1 : Form
         };
         workspace.DragEnter += Workspace_DragEnter;
         workspace.DragDrop += Workspace_DragDrop;
+        workspace.ContextMenuStrip = _workspaceMenu;
         workspace.MouseDown += Workspace_MouseDown;
         workspace.MouseMove += Workspace_MouseMove;
         workspace.MouseUp += Workspace_MouseUp;
@@ -125,18 +175,61 @@ public partial class Form1 : Form
         page.Controls.Add(workspace);
         page.Tag = tab;
 
+        tabs.TabPages.Add(page);
+        tabs.SelectedTab = page;
+
         foreach (var item in tab.Items)
             CreateView(workspace, item);
 
-        tabs.TabPages.Add(page);
-        tabs.SelectedTab = page;
         return page;
     }
 
     private static Panel WorkspaceFromPage(TabPage page) => (Panel)page.Controls[0];
     private static Tab TabFromPage(TabPage page) => (Tab)page.Tag!;
-    private static Tab TabFromSelected(TabControl tc) => (Tab)tc.SelectedTab!.Tag!;
+    private static Tab TabFromSelected(TabControl tc) => (Tab)(tc.SelectedTab?.Tag ?? (tc.TabCount > 0 ? tc.TabPages[0].Tag : null))!;
     private static bool ItemExists(string path) => Directory.Exists(path) || File.Exists(path) || IsUrl(path);
+
+    private static readonly Color NoteBackColor = Color.FromArgb(220, 255, 255, 200);
+    private static readonly Color NoteSelectionBackColor = Color.FromArgb(255, 255, 240, 150);
+
+    private static Color SelectionTint()
+    {
+        var c = SystemColors.Highlight;
+        return Color.FromArgb(26, c.R, c.G, c.B);
+    }
+
+    private static bool IsSelectable(Control c) =>
+        (c is Panel && c.Tag is IconItem) || (c is Label && c.Tag is NoteItem);
+
+    private static bool IsSelected(Control c) => c switch
+    {
+        Panel => c.BackColor != Color.Transparent,
+        Label => c.BackColor != NoteBackColor,
+        _ => false
+    };
+
+    private static void SetSelected(Control c, bool selected)
+    {
+        if (c is Panel p)
+        {
+            p.BackColor = selected ? SelectionTint() : Color.Transparent;
+            if (p.Controls.Count > 1 && p.Controls[1] is Label title)
+                title.ForeColor = SystemColors.WindowText;
+        }
+        else if (c is Label note)
+        {
+            note.BackColor = selected ? NoteSelectionBackColor : NoteBackColor;
+        }
+    }
+
+    private static string GetItemDisplayName(Item item) => item switch
+    {
+        IconItem i => i.Label ?? Path.GetFileName(i.Path) ?? i.Path,
+        NoteItem n => n.Text,
+        _ => ""
+    };
+
+    private static string? GetItemPath(Item item) => item is IconItem i ? i.Path : null;
 
     private static string? ExtractUrlTitle(IDataObject data, string url)
     {
@@ -217,8 +310,8 @@ public partial class Form1 : Form
             foreach (var path in files.Where(ItemExists))
             {
                 var loc = SnapToGrid(workspace, new Size(110, 90),
-                    new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
-                var item = new IconItem(path, loc.X, loc.Y, null);
+                    new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
+                var item = new IconItem(path, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), null);
                 tab.Items.Add(item);
                 CreateIconView(workspace, item);
                 i++;
@@ -232,8 +325,8 @@ public partial class Form1 : Form
                 var url = NormalizeUrl(text);
                 var label = ExtractUrlTitle(e.Data, url);
                 var loc = SnapToGrid(workspace, new Size(110, 90),
-                    new Point(dropPoint.X + i % 3 * GridSize, dropPoint.Y + i / 3 * GridSize));
-                var item = new IconItem(url, loc.X, loc.Y, label);
+                    new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
+                var item = new IconItem(url, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), label);
                 tab.Items.Add(item);
                 var p = CreateIconView(workspace, item);
                 if (label is null && p.Controls[1] is Label titleLabel)
@@ -269,21 +362,43 @@ public partial class Form1 : Form
 
     private void Workspace_MouseUp(object? sender, MouseEventArgs e)
     {
-        if (!_selecting || e.Button != MouseButtons.Left || sender is not Panel workspace) return;
+        if (sender is not Panel workspace) return;
+        if (e.Button == MouseButtons.Right)
+        {
+            if (workspace.GetChildAtPoint(e.Location) == null)
+                _workspaceMenu.Show(workspace, e.Location);
+            return;
+        }
+        if (!_selecting || e.Button != MouseButtons.Left) return;
         _selecting = false;
         if (_selRect.Width > 0 && _selRect.Height > 0) workspace.Invalidate(_selRect);
         if (_selRect.Width > 3 && _selRect.Height > 3)
-            SelectIcons(workspace, _selRect);
+            SelectItems(workspace, _selRect);
     }
 
     private void Workspace_Paint(object? sender, PaintEventArgs e)
     {
+        if (sender is not Panel workspace) return;
+        if (_showGridDots)
+            DrawGridDots(e.Graphics, workspace);
         if (!_selecting || _selRect.Width <= 0 || _selRect.Height <= 0) return;
         var c = SystemColors.Highlight;
         using var fill = new SolidBrush(Color.FromArgb(32, c.R, c.G, c.B));
         using var pen = new Pen(c, 1);
         e.Graphics.FillRectangle(fill, _selRect);
         e.Graphics.DrawRectangle(pen, _selRect.X, _selRect.Y, _selRect.Width - 1, _selRect.Height - 1);
+    }
+
+    private static void DrawGridDots(Graphics g, Panel workspace)
+    {
+        var grid = (int)(GridSize * 1f); // shown at base grid
+        if (grid <= 0) grid = GridSize;
+        using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
+        const int r = 1;
+        var bounds = workspace.ClientRectangle;
+        for (int x = 0; x < bounds.Width; x += grid)
+            for (int y = 0; y < bounds.Height; y += grid)
+                g.FillEllipse(brush, x - r, y - r, r * 2, r * 2);
     }
 
     private static Rectangle SelectionRect(Point a, Point b)
@@ -293,51 +408,28 @@ public partial class Form1 : Form
         return new Rectangle(x, y, Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
     }
 
-    private static void SelectIcons(Panel workspace, Rectangle rect)
+    private static void SelectItems(Panel workspace, Rectangle rect)
     {
-        foreach (var panel in workspace.Controls.OfType<Panel>().Where(p => p.Tag is IconItem))
-        {
-            if (!rect.IntersectsWith(panel.Bounds)) continue;
-            var c = SystemColors.Highlight;
-            panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
-            if (panel.Controls.Count > 1 && panel.Controls[1] is Label title)
-                title.ForeColor = SystemColors.WindowText;
-        }
+        foreach (var c in workspace.Controls.OfType<Control>().Where(IsSelectable))
+            if (rect.IntersectsWith(c.Bounds))
+                SetSelected(c, true);
     }
-
-
 
     private static void ClearHighlights(Panel workspace)
     {
-        foreach (var panel in workspace.Controls.OfType<Panel>())
-        {
-            panel.BackColor = Color.Transparent;
-            if (panel.Controls.Count > 1 && panel.Controls[1] is Label title)
-                title.ForeColor = SystemColors.WindowText;
-        }
+        foreach (var c in workspace.Controls.OfType<Control>().Where(IsSelectable))
+            SetSelected(c, false);
     }
 
-    private static void SelectIcon(Panel workspace, Panel panel, Label title)
+    private static void SelectSingle(Panel workspace, Control c)
     {
         ClearHighlights(workspace);
-        var c = SystemColors.Highlight;
-        panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
-        title.ForeColor = SystemColors.WindowText;
+        SetSelected(c, true);
     }
 
-    private static void ToggleSelection(Panel panel, Label title)
+    private static void Toggle(Control c)
     {
-        bool isSelected = panel.BackColor != Color.Transparent;
-        if (isSelected)
-        {
-            panel.BackColor = Color.Transparent;
-        }
-        else
-        {
-            var c = SystemColors.Highlight;
-            panel.BackColor = Color.FromArgb(26, c.R, c.G, c.B);
-        }
-        title.ForeColor = SystemColors.WindowText;
+        SetSelected(c, !IsSelected(c));
     }
 
     private void Workspace_MouseDoubleClick(object? sender, MouseEventArgs e)
@@ -348,7 +440,7 @@ public partial class Form1 : Form
         if (string.IsNullOrWhiteSpace(text)) return;
         var tab = TabFromSelected(tabs);
         var loc = Clamp(workspace, new Size(120, 40), e.Location);
-        var item = new NoteItem(text, loc.X, loc.Y);
+        var item = new NoteItem(text, (int)(loc.X / _zoom), (int)(loc.Y / _zoom));
         tab.Items.Add(item);
         CreateNoteView(workspace, item);
         _board.Dirty();
@@ -361,6 +453,18 @@ public partial class Form1 : Form
             if (tabs.GetTabRect(i).Contains(e.Location))
             {
                 _tabMenu.Show(tabs, e.Location);
+                return;
+            }
+    }
+
+    private void Tabs_MouseDoubleClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        for (int i = 0; i < tabs.TabPages.Count; i++)
+            if (tabs.GetTabRect(i).Contains(e.Location))
+            {
+                tabs.SelectedIndex = i;
+                RenameTab(null, EventArgs.Empty);
                 return;
             }
     }
@@ -500,6 +604,115 @@ public partial class Form1 : Form
         ghost.Dispose();
     }
 
+    private float NextZoom(int direction)
+    {
+        var z = (float)Math.Round(_zoom / ZoomStep + direction) * ZoomStep;
+        return Math.Clamp(z, ZoomMin, ZoomMax);
+    }
+
+    private void ZoomIn()
+    {
+        var z = NextZoom(1);
+        if (Math.Abs(z - _zoom) < 0.001f) return;
+        _zoom = z;
+        if (tabs.SelectedTab is TabPage page)
+            ApplyZoom(WorkspaceFromPage(page));
+    }
+
+    private void ZoomOut()
+    {
+        var z = NextZoom(-1);
+        if (Math.Abs(z - _zoom) < 0.001f) return;
+        _zoom = z;
+        if (tabs.SelectedTab is TabPage page)
+            ApplyZoom(WorkspaceFromPage(page));
+    }
+
+    private void ResetZoom()
+    {
+        if (_zoom == 1f) return;
+        _zoom = 1f;
+        if (tabs.SelectedTab is TabPage page)
+            ApplyZoom(WorkspaceFromPage(page));
+    }
+
+    private void ApplyZoom(Panel workspace)
+    {
+        foreach (Control c in workspace.Controls)
+            ApplyZoomToControl(c);
+        workspace.Invalidate();
+    }
+
+    private void ApplyZoomToControl(Control c)
+    {
+        switch (c.Tag)
+        {
+            case IconItem iconItem:
+                ScaleIconView((Panel)c, iconItem);
+                break;
+            case NoteItem noteItem:
+                ScaleNoteView((Label)c, noteItem);
+                break;
+        }
+    }
+
+    private void ScaleIconView(Panel panel, IconItem item)
+    {
+        var title = panel.Controls.OfType<Label>().First(l => l.Tag is string);
+        var icon = panel.Controls.OfType<Label>().First(l => l.Tag is not null && l.Tag is not string);
+        var displayName = title.Tag?.ToString() ?? "";
+
+        var labelWidth = (int)(110 * _zoom);
+        var titleFont = new Font(TitleFont.FontFamily, TitleFont.Size * _zoom);
+        var titleSize = TextRenderer.MeasureText(
+            displayName, titleFont,
+            new Size(labelWidth, int.MaxValue), TitleFlags);
+        var panelHeight = (int)(6 * _zoom) + (int)(42 * _zoom) + titleSize.Height + (int)(6 * _zoom);
+
+        panel.Size = new Size(labelWidth, panelHeight);
+        panel.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
+
+        icon.Size = new Size((int)(60 * _zoom), (int)(42 * _zoom));
+        icon.Location = new Point((labelWidth - icon.Width) / 2, (int)(6 * _zoom));
+
+        var original = icon.Tag as Image ?? icon.Image;
+        if (original is not null)
+            icon.Image = ScaleBitmap(original, icon.Size);
+
+        title.Size = new Size(labelWidth, titleSize.Height);
+        title.Location = new Point(0, (int)(48 * _zoom));
+        ReplaceFont(title, titleFont);
+    }
+
+    private void ScaleNoteView(Label note, NoteItem item)
+    {
+        note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
+        note.Padding = new Padding((int)(6 * _zoom));
+        ReplaceFont(note, new Font(TitleFont.FontFamily, TitleFont.Size * _zoom));
+    }
+
+    private static void ReplaceFont(Control c, Font font)
+    {
+        var old = c.Font;
+        if (old != TitleFont) old.Dispose();
+        c.Font = font;
+    }
+
+    private static Bitmap ScaleBitmap(Image source, Size fit)
+    {
+        var bmp = new Bitmap(fit.Width, fit.Height);
+        using var g = Graphics.FromImage(bmp);
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.Clear(Color.Transparent);
+        var scale = Math.Min((float)fit.Width / source.Width, (float)fit.Height / source.Height);
+        var w = (int)(source.Width * scale);
+        var h = (int)(source.Height * scale);
+        var x = (fit.Width - w) / 2;
+        var y = (fit.Height - h) / 2;
+        g.DrawImage(source, x, y, w, h);
+        return bmp;
+    }
+
     private Panel CreateIconView(Panel workspace, IconItem item)
     {
         var fileName = Path.GetFileName(item.Path);
@@ -543,12 +756,14 @@ public partial class Form1 : Form
             if (icon.Image is null)
             {
                 icon.Image = GetIconBitmap(item.Path, false); // chrome placeholder until favicon loads
-                _ = FetchUrlFaviconAsync(item.Path, panel, icon);
             }
+            icon.Tag = icon.Image;
+            _ = FetchUrlFaviconAsync(item.Path, panel, icon);
         }
         else
         {
             icon.Image = GetIconBitmap(item.Path, Directory.Exists(item.Path));
+            icon.Tag = icon.Image;
         }
 
         var title = new Label
@@ -564,7 +779,7 @@ public partial class Form1 : Form
             Tag = displayName
         };
         title.Paint += (s, e) =>
-            TextRenderer.DrawText(e.Graphics, (string)title.Tag!, TitleFont,
+            TextRenderer.DrawText(e.Graphics, (string)title.Tag!, title.Font,
                 title.ClientRectangle, title.ForeColor, TitleFlags);
 
         panel.Controls.Add(icon);
@@ -581,31 +796,31 @@ public partial class Form1 : Form
         menu.Items.Add("Rename", null, (s, e) => RenameIcon(item, title, panel));
         menu.Items.Add("Delete", null, (s, e) =>
         {
-            if (panel.BackColor != Color.Transparent)
-                DeleteSelectedIcons(workspace);
+            if (IsSelected(panel))
+                DeleteSelectedItems(workspace);
             else
                 DeleteIcon(workspace, item, panel);
         });
         panel.ContextMenuStrip = menu;
 
-        List<(Panel p, IconItem i, Point s, Label g)>? dragGroup = null;
+        List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
         WireDrag(new Control[] { panel, icon, title },
             onDragStart: () =>
             {
                 // Only clear selection if this icon wasn't already selected
-                if (panel.BackColor == Color.Transparent)
-                    SelectIcon(workspace, panel, title);
-                // Create ghosts for all selected icons and send originals behind them
-                dragGroup = workspace.Controls.OfType<Panel>()
-                    .Where(p => p.Tag is IconItem && p.BackColor != Color.Transparent)
-                    .Select(p =>
+                if (!IsSelected(panel))
+                    SelectSingle(workspace, panel);
+                // Create ghosts for all selected items and send originals behind them
+                dragGroup = workspace.Controls.OfType<Control>()
+                    .Where(IsSelected)
+                    .Select(c =>
                     {
-                        var g = CreateDragGhost(p);
-                        g.Location = p.Location;
+                        var g = CreateDragGhost(c);
+                        g.Location = c.Location;
                         workspace.Controls.Add(g);
                         g.BringToFront();
-                        p.SendToBack();
-                        return (p, (IconItem)p.Tag!, p.Location, g);
+                        c.SendToBack();
+                        return (c, (Item)c.Tag!, c.Location, g);
                     })
                     .ToList();
             },
@@ -623,9 +838,9 @@ public partial class Form1 : Form
                         DisposeDragGhost(g, workspace);
                 dragGroup = null;
                 if ((Control.ModifierKeys & Keys.Control) != 0)
-                    ToggleSelection(panel, title);
+                    Toggle(panel);
                 else
-                    SelectIcon(workspace, panel, title);
+                    SelectSingle(workspace, panel);
             },
             onDoubleClick: ctrl =>
             {
@@ -649,11 +864,11 @@ public partial class Form1 : Form
             onDragEnd: () =>
             {
                 if (dragGroup is null) return;
-                foreach (var (gp, gi, gs, g) in dragGroup)
+                foreach (var (c, i, _, g) in dragGroup)
                 {
-                    gp.Location = SnapToGrid(workspace, gp.Size, g.Location);
-                    gi.X = gp.Left;
-                    gi.Y = gp.Top;
+                    c.Location = SnapToGrid(workspace, c.Size, g.Location);
+                    i.X = (int)(c.Left / _zoom);
+                    i.Y = (int)(c.Top / _zoom);
                 }
                 foreach (var (_, _, _, g) in dragGroup)
                     DisposeDragGhost(g, workspace);
@@ -683,6 +898,7 @@ public partial class Form1 : Form
         };
 
         workspace.Controls.Add(panel);
+        ApplyZoomToControl(panel);
         return panel;
     }
 
@@ -723,6 +939,7 @@ public partial class Form1 : Form
                         if (panel.IsDisposed) return;
                         var old = icon.Image;
                         icon.Image = cached;
+                        icon.Tag = cached;
                         old?.Dispose();
                     });
                 }
@@ -744,6 +961,7 @@ public partial class Form1 : Form
                 if (panel.IsDisposed) return;
                 var old = icon.Image;
                 icon.Image = bmp;
+                icon.Tag = bmp;
                 old?.Dispose();
             });
         }
@@ -786,17 +1004,11 @@ public partial class Form1 : Form
         return ResizeToIcon(source);
     }
 
-    private static void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
+    private void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
     {
         item.Label = newLabel;
-        const int labelWidth = 110;
-        var size = TextRenderer.MeasureText(
-            newLabel, TitleFont,
-            new Size(labelWidth, int.MaxValue),
-            TitleFlags);
         title.Tag = newLabel;
-        title.Size = new Size(labelWidth, size.Height);
-        panel.Size = new Size(labelWidth, 6 + 42 + size.Height + 6);
+        ApplyZoomToControl(panel);
         title.Invalidate();
     }
 
@@ -819,30 +1031,31 @@ public partial class Form1 : Form
         _board.Dirty();
     }
 
-    private void DeleteSelectedIcons(Panel workspace)
+    private void DeleteSelectedItems(Panel workspace)
     {
-        var selected = workspace.Controls.OfType<Panel>()
-            .Where(p => p.Tag is IconItem && p.BackColor != Color.Transparent)
-            .ToList();
+        var selected = workspace.Controls.OfType<Control>().Where(IsSelected).ToList();
         if (selected.Count == 0) return;
 
         var message = selected.Count == 1
-            ? $"Remove '{GetIconDisplayName((IconItem)selected[0].Tag!)}' from the board?"
-            : $"Remove {selected.Count} selected icons from the board?";
-        var detail = selected.All(p => ItemExists(((IconItem)p.Tag!).Path))
+            ? $"Remove '{GetItemDisplayName((Item)selected[0].Tag!)}' from the board?"
+            : $"Remove {selected.Count} selected items from the board?";
+        var iconPaths = selected
+            .Where(c => c.Tag is IconItem)
+            .Select(c => ((IconItem)c.Tag!).Path);
+        var detail = iconPaths.All(ItemExists)
             ? "\n\nThe original files/folders will not be affected."
             : "";
         if (MessageBox.Show(message + detail, "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
         var tab = TabFromSelected(tabs);
-        foreach (var p in selected)
+        foreach (var c in selected)
         {
-            var iconItem = (IconItem)p.Tag!;
-            workspace.Controls.Remove(p);
-            tab.Items.Remove(iconItem);
-            DisposeItemControl(p);
-            DeleteFaviconCache(iconItem.Path);
+            workspace.Controls.Remove(c);
+            tab.Items.Remove((Item)c.Tag!);
+            if (c.Tag is IconItem iconItem)
+                DeleteFaviconCache(iconItem.Path);
+            DisposeItemControl(c);
         }
         _board.Dirty();
     }
@@ -866,8 +1079,6 @@ public partial class Form1 : Form
             Tag = item
         };
 
-        Label? ghost = null;
-        var start = Point.Empty;
         void EditNote()
         {
             var newText = Prompt("Edit note", "Edit note:", item.Text);
@@ -876,38 +1087,57 @@ public partial class Form1 : Form
             note.Text = newText;
             _board.Dirty();
         }
+
+        List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
         WireDrag(new[] { note },
             onDragStart: () =>
             {
-                start = note.Location;
-                ghost = CreateDragGhost(note);
-                ghost.Location = start;
-                note.BringToFront();
-                workspace.Controls.Add(ghost);
-                ghost.BringToFront();
+                if (!IsSelected(note))
+                    SelectSingle(workspace, note);
+                dragGroup = workspace.Controls.OfType<Control>()
+                    .Where(IsSelected)
+                    .Select(c =>
+                    {
+                        var g = CreateDragGhost(c);
+                        g.Location = c.Location;
+                        workspace.Controls.Add(g);
+                        g.BringToFront();
+                        c.SendToBack();
+                        return (c, (Item)c.Tag!, c.Location, g);
+                    })
+                    .ToList();
             },
             onDrag: (dx, dy) =>
             {
-                if (ghost is null) return;
-                ghost.Location = Clamp(workspace, ghost.Size,
-                    new Point(start.X + dx, start.Y + dy));
+                if (dragGroup is null) return;
+                foreach (var (_, _, gs, g) in dragGroup)
+                    g.Location = Clamp(workspace, g.Size,
+                        new Point(gs.X + dx, gs.Y + dy));
             },
             onClick: () =>
             {
-                DisposeDragGhost(ghost, workspace);
-                ghost = null;
-                note.BringToFront();
+                if (dragGroup is not null)
+                    foreach (var (_, _, _, g) in dragGroup)
+                        DisposeDragGhost(g, workspace);
+                dragGroup = null;
+                if ((Control.ModifierKeys & Keys.Control) != 0)
+                    Toggle(note);
+                else
+                    SelectSingle(workspace, note);
             },
             onDoubleClick: _ => EditNote(),
             onDragEnd: () =>
             {
-                if (ghost is null) return;
-                note.Location = ghost.Location;
-                item.X = note.Left;
-                item.Y = note.Top;
-                note.BringToFront();
-                DisposeDragGhost(ghost, workspace);
-                ghost = null;
+                if (dragGroup is null) return;
+                foreach (var (c, i, _, g) in dragGroup)
+                {
+                    c.Location = SnapToGrid(workspace, c.Size, g.Location);
+                    i.X = (int)(c.Left / _zoom);
+                    i.Y = (int)(c.Top / _zoom);
+                }
+                foreach (var (_, _, _, g) in dragGroup)
+                    DisposeDragGhost(g, workspace);
+                dragGroup = null;
                 _board.Dirty();
             });
 
@@ -915,6 +1145,11 @@ public partial class Form1 : Form
         menu.Items.Add("Edit", null, (s, e) => EditNote());
         menu.Items.Add("Delete", null, (s, e) =>
         {
+            if (IsSelected(note))
+            {
+                DeleteSelectedItems(workspace);
+                return;
+            }
             if (MessageBox.Show(
                     $"Remove note '{item.Text}'?\n\nThis will only remove the note from the board.",
                     "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -926,6 +1161,7 @@ public partial class Form1 : Form
         });
         note.ContextMenuStrip = menu;
 
+        ApplyZoomToControl(note);
         workspace.Controls.Add(note);
     }
 
@@ -937,6 +1173,7 @@ public partial class Form1 : Form
                 {
                     l.Image.Dispose();
                     l.Image = null;
+                    l.Tag = null;
                 }
         c.Dispose();
     }
@@ -949,10 +1186,12 @@ public partial class Form1 : Form
         return new Point(x, y);
     }
 
-    private static Point SnapToGrid(Panel workspace, Size size, Point p)
+    private Point SnapToGrid(Panel workspace, Size size, Point p)
     {
-        int x = (int)Math.Round((double)p.X / GridSize) * GridSize;
-        int y = (int)Math.Round((double)p.Y / GridSize) * GridSize;
+        var grid = (int)(GridSize * _zoom);
+        if (grid == 0) grid = GridSize;
+        int x = (int)Math.Round((double)p.X / grid) * grid;
+        int y = (int)Math.Round((double)p.Y / grid) * grid;
         return Clamp(workspace, size, new Point(x, y));
     }
 
@@ -1033,29 +1272,39 @@ public partial class Form1 : Form
         try
         {
             var json = File.ReadAllText(_stateFile);
-            var state = JsonSerializer.Deserialize<AppState>(json)
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var state = JsonSerializer.Deserialize<AppState>(json, options)
                 ?? new AppState(new List<TabState>());
 
-            foreach (var t in state.Tabs)
+            if (state.Tabs != null)
             {
-                var tab = new Tab(t.Name);
-                foreach (var it in t.Items)
+                foreach (var t in state.Tabs ?? new List<TabState>())
                 {
-                    Item item = it.IsNote
-                        ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y))
-                        : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
-                    tab.Items.Add(item);
+                    var tab = new Tab(t.Name) { Zoom = t.Zoom ?? 1.0f };
+                    foreach (var it in t.Items ?? new List<ItemState>())
+                    {
+                        Item item = it.IsNote
+                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y))
+                            : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
+                        tab.Items.Add(item);
+                    }
+                    _board.Tabs.Add(tab);
                 }
-                _board.Tabs.Add(tab);
             }
+
+            _board.ShowGridDots = state.ShowGridDots ?? false;
+            _showGridDots = _board.ShowGridDots;
 
             foreach (var tab in _board.Tabs)
                 CreateTabPage(tab);
 
             if (tabs.TabPages.Count == 0)
                 AddTab("Board");
-            else if (_board.Tabs.Count > 0)
-                tabs.SelectedIndex = Math.Clamp(state.SelectedTabIndex, 0, tabs.TabPages.Count - 1);
+            else if (tabs.TabCount > 0)
+                tabs.SelectedIndex = Math.Clamp(state.SelectedTabIndex, 0, tabs.TabCount - 1);
+
+            if (tabs.SelectedTab is TabPage page)
+                ApplyZoom(WorkspaceFromPage(page));
 
             if (state.Window is not null)
             {
@@ -1068,6 +1317,9 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
+            // Write log to app directory. If this fails, the app will crash,
+            // which is preferable to silent failure while debugging.
+            File.WriteAllText(Path.Combine(Path.GetDirectoryName(_stateFile)!, "error.log"), ex.ToString());
             try { File.Copy(_stateFile, _stateFile + ".corrupt", overwrite: true); } catch { }
             MessageBox.Show(
                 $"The state file was corrupt and could not be loaded.\nA backup was saved as state.json.corrupt.\n\n{ex.Message}",
@@ -1081,6 +1333,7 @@ public partial class Form1 : Form
     private void SaveState()
     {
         _board.SelectedIndex = tabs.SelectedIndex;
+        _board.ShowGridDots = _showGridDots;
         var window = new WindowState(Location.X, Location.Y, Size.Width, Size.Height);
         var json = JsonSerializer.Serialize(_board.ToState(window));
         try { if (File.Exists(_stateFile)) File.Copy(_stateFile, _stateBak, overwrite: true); } catch { }
