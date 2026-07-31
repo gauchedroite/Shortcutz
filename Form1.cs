@@ -445,7 +445,7 @@ public partial class Form1 : Form
     {
         if (sender is not Panel workspace) return;
         if (workspace.GetChildAtPoint(e.Location) != null) return;
-        var text = Prompt("New note", "Enter note text:", "");
+        var text = Prompt("New note", "Enter note text:", "", multiline: true);
         if (string.IsNullOrWhiteSpace(text)) return;
         var tab = TabFromSelected(tabs);
         var loc = Clamp(workspace, new Size(120, 40), e.Location);
@@ -752,9 +752,15 @@ public partial class Form1 : Form
 
     private void ScaleNoteView(Label note, NoteItem item)
     {
-        note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
         note.Padding = new Padding((int)(6 * _zoom));
         ReplaceFont(note, new Font(TitleFont.FontFamily, TitleFont.Size * _zoom));
+        int w = (int)(item.Width * _zoom);
+        note.Width = w;
+        var tsize = TextRenderer.MeasureText(note.Text, note.Font,
+            new Size(w - note.Padding.Horizontal, int.MaxValue),
+            TextFormatFlags.WordBreak);
+        note.Height = tsize.Height + note.Padding.Vertical;
+        note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
     }
 
     private static void ReplaceFont(Control c, Font font)
@@ -1178,10 +1184,11 @@ public partial class Form1 : Form
 
     private void RenameNote(NoteItem item, Label note)
     {
-        var newText = Prompt("Edit note", "Edit note:", item.Text);
+        var newText = Prompt("Edit note", "Edit note:", item.Text, multiline: true);
         if (string.IsNullOrWhiteSpace(newText)) return;
         item.Text = newText;
         note.Text = newText;
+        ScaleNoteView(note, item);
         _board.Dirty();
     }
 
@@ -1248,7 +1255,8 @@ public partial class Form1 : Form
     {
         var note = new Label
         {
-            AutoSize = true,
+            AutoSize = false,
+            Size = new Size(item.Width, 40),
             Location = new Point(item.X, item.Y),
             BackColor = Color.FromArgb(220, 255, 255, 200),
             ForeColor = SystemColors.WindowText,
@@ -1335,6 +1343,55 @@ public partial class Form1 : Form
             _board.Dirty();
         });
         note.ContextMenuStrip = menu;
+
+        // Resize grip: child control in the bottom-right corner, fully separate
+        // from the note's drag/select wiring (child consumes its own mouse events).
+        const int gripSize = 10;
+        var grip = new Panel
+        {
+            Size = new Size(gripSize, gripSize),
+            Location = new Point(item.Width - gripSize, 40 - gripSize),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            BackColor = Color.Transparent,
+            Cursor = Cursors.SizeNWSE
+        };
+        grip.Paint += (s, e) =>
+        {
+            var g = e.Graphics;
+            using var pen = new Pen(Color.FromArgb(120, 80, 80, 80), 1f);
+            var r = grip.ClientRectangle;
+            // two strokes form a small "\" triangle in the corner
+            g.DrawLine(pen, r.Right - 4, r.Bottom - 1, r.Right - 1, r.Bottom - 4);
+            g.DrawLine(pen, r.Right - 7, r.Bottom - 1, r.Right - 1, r.Bottom - 7);
+        };
+        bool resizing = false;
+        int resizeStartWidth = 0;
+        Point resizeStartMouse = Point.Empty;
+        grip.MouseDown += (s, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            resizing = true;
+            resizeStartWidth = item.Width;
+            resizeStartMouse = grip.PointToScreen(e.Location);
+            grip.Capture = true;
+            SelectSingle(workspace, note);
+        };
+        grip.MouseMove += (s, e) =>
+        {
+            if (!resizing) return;
+            var now = grip.PointToScreen(e.Location);
+            int delta = (int)((now.X - resizeStartMouse.X) / _zoom);
+            item.Width = Math.Clamp(resizeStartWidth + delta, NoteItem.MinWidth, NoteItem.MaxWidth);
+            ScaleNoteView(note, item);
+        };
+        grip.MouseUp += (s, e) =>
+        {
+            if (!resizing) return;
+            resizing = false;
+            grip.Capture = false;
+            _board.Dirty();
+        };
+        note.Controls.Add(grip);
 
         ApplyZoomToControl(note);
         workspace.Controls.Add(note);
@@ -1459,7 +1516,7 @@ public partial class Form1 : Form
                     foreach (var it in t.Items ?? new List<ItemState>())
                     {
                         Item item = it.IsNote
-                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y))
+                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth)
                             : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
                         tab.Items.Add(item);
                     }
@@ -1553,9 +1610,9 @@ public partial class Form1 : Form
 
     // ---------- prompt ----------
 
-    private string? Prompt(string title, string label, string initial)
+    private string? Prompt(string title, string label, string initial, bool multiline = false)
     {
-        using var f = new PromptForm(title, label, initial);
+        using var f = new PromptForm(title, label, initial, multiline);
         return f.ShowDialog(this) == DialogResult.OK ? f.Result : null;
     }
 }

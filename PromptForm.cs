@@ -6,7 +6,7 @@ public sealed class PromptForm : Form
     private readonly TextBox _box;
     public string Result => _box.Text;
 
-    public PromptForm(string title, string label, string initial)
+    public PromptForm(string title, string label, string initial, bool multiline = false)
     {
         Text = title;
         ClientSize = new Size(360, 150);
@@ -28,8 +28,32 @@ public sealed class PromptForm : Form
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(277, 118), Size = new Size(75, 23) };
 
         Controls.AddRange(lbl, _box, ok, cancel);
-        AcceptButton = ok;
         CancelButton = cancel;
+        if (multiline)
+        {
+            // Enter confirms, Shift+Enter inserts a newline, Esc cancels.
+            _box.AcceptsReturn = false;
+            _box.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    if (e.Shift)
+                    {
+                        e.SuppressKeyPress = true;
+                        _box.SelectedText = Environment.NewLine;
+                    }
+                    else if (!e.Control)
+                    {
+                        e.SuppressKeyPress = true;
+                        ok.PerformClick();
+                    }
+                }
+            };
+        }
+        else
+        {
+            AcceptButton = ok;
+        }
         _box.SelectAll();
         _box.Focus();
     }
