@@ -101,6 +101,13 @@ public partial class Form1 : Form
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.F1)
+        {
+            e.Handled = true;
+            try { Process.Start(new ProcessStartInfo("README.md") { UseShellExecute = true }); }
+            catch { }
+            return;
+        }
         if (e.KeyCode == Keys.R && e.Control)
         {
             e.Handled = true;
