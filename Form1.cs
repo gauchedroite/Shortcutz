@@ -104,7 +104,7 @@ public partial class Form1 : Form
         if (e.KeyCode == Keys.F1)
         {
             e.Handled = true;
-            try { Process.Start(new ProcessStartInfo("README.md") { UseShellExecute = true }); }
+            try { Process.Start(new ProcessStartInfo(FindReadme() ?? "README.md") { UseShellExecute = true }); }
             catch { }
             return;
         }
@@ -1629,6 +1629,18 @@ public partial class Form1 : Form
             @"C:\Program Files (x86)\Notepad++\notepad++.exe",
         })
             if (File.Exists(p)) return p;
+        return null;
+    }
+
+    private static string? FindReadme()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var p = Path.Combine(dir, "README.md");
+            if (File.Exists(p)) return p;
+            dir = Directory.GetParent(dir)?.FullName;
+        }
         return null;
     }
 
