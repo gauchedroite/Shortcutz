@@ -55,7 +55,7 @@ public partial class Form1 : Form
         ResumeLayout(false);
 
         _tabMenu = new ContextMenuStrip();
-        _tabMenu.Items.Add("Add tab", null, (s, e) => { AddTab("New tab"); _board.Dirty(); });
+        _tabMenu.Items.Add("Add tab", null, (s, e) => { AddTab("New tab", tabs.SelectedIndex + 1); _board.Dirty(); });
         _tabMenu.Items.Add("Rename", null, RenameTab);
         _tabMenu.Items.Add("Delete", null, CloseTab);
         tabs.MouseUp += Tabs_MouseUp;
@@ -163,15 +163,18 @@ public partial class Form1 : Form
 
     // ---------- tabs ----------
 
-    private Tab AddTab(string name)
+    private Tab AddTab(string name, int index = -1)
     {
         var tab = new Tab(name);
-        _board.Tabs.Add(tab);
-        CreateTabPage(tab);
+        if (index < 0 || index >= _board.Tabs.Count)
+            _board.Tabs.Add(tab);
+        else
+            _board.Tabs.Insert(index, tab);
+        CreateTabPage(tab, index);
         return tab;
     }
 
-    private TabPage CreateTabPage(Tab tab)
+    private TabPage CreateTabPage(Tab tab, int index = -1)
     {
         var page = new TabPage(tab.Name);
         var workspace = new Panel
@@ -192,7 +195,10 @@ public partial class Form1 : Form
         page.Controls.Add(workspace);
         page.Tag = tab;
 
-        tabs.TabPages.Add(page);
+        if (index < 0 || index >= tabs.TabPages.Count)
+            tabs.TabPages.Add(page);
+        else
+            tabs.TabPages.Insert(index, page);
         tabs.SelectedTab = page;
 
         foreach (var item in tab.Items)
@@ -520,6 +526,7 @@ public partial class Form1 : Form
         for (int i = 0; i < tabs.TabPages.Count; i++)
             if (tabs.GetTabRect(i).Contains(e.Location))
             {
+                tabs.SelectedIndex = i;
                 _tabMenu.Show(tabs, e.Location);
                 return;
             }
