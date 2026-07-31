@@ -937,6 +937,14 @@ public partial class Form1 : Form
                         MessageBoxIcon.Warning);
                     return;
                 }
+                if ((Control.ModifierKeys & Keys.Shift) != 0
+                    && !IsUrl(item.Path) && !Directory.Exists(item.Path)
+                    && FindNotepadPlus() is string npp)
+                {
+                    try { Process.Start(new ProcessStartInfo(npp) { UseShellExecute = false, ArgumentList = { item.Path } }); }
+                    catch (Exception ex) { MessageBox.Show(ex.Message, "Could not open in Notepad++", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                    return;
+                }
                 OpenItem(item.Path);
             },
             onDragEnd: () =>
@@ -1597,6 +1605,17 @@ public partial class Form1 : Form
         {
             MessageBox.Show(ex.Message, "Could not open item", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private static string? FindNotepadPlus()
+    {
+        foreach (var p in new[]
+        {
+            @"C:\Program Files\Notepad++\notepad++.exe",
+            @"C:\Program Files (x86)\Notepad++\notepad++.exe",
+        })
+            if (File.Exists(p)) return p;
+        return null;
     }
 
     private static string? FindChrome()
