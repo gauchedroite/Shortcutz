@@ -54,6 +54,9 @@ public partial class Form1 : Form
         _tabMenu.Items.Add("Close", null, CloseTab);
         tabs.MouseUp += Tabs_MouseUp;
         tabs.MouseDoubleClick += Tabs_MouseDoubleClick;
+        tabs.MouseDown += Tabs_MouseDown;
+        tabs.MouseMove += Tabs_MouseMove;
+        tabs.MouseUp += Tabs_MouseUpReorder;
 
         _workspaceMenu = new ContextMenuStrip();
         var showGridItem = new ToolStripMenuItem("Show grid dots") { CheckOnClick = true };
@@ -450,6 +453,59 @@ public partial class Form1 : Form
         tab.Items.Add(item);
         CreateNoteView(workspace, item);
         _board.Dirty();
+    }
+
+    private int _dragTabFrom = -1;
+    private Point _dragTabStart;
+    private bool _dragTabActive;
+
+    private int TabIndexAt(Point p)
+    {
+        for (int i = 0; i < tabs.TabPages.Count; i++)
+            if (tabs.GetTabRect(i).Contains(p)) return i;
+        return -1;
+    }
+
+    private void Tabs_MouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        _dragTabFrom = TabIndexAt(e.Location);
+        _dragTabStart = e.Location;
+        _dragTabActive = false;
+    }
+
+    private void Tabs_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (_dragTabFrom < 0 || e.Button != MouseButtons.Left) return;
+        if (!_dragTabActive && (Math.Abs(e.X - _dragTabStart.X) > 3 || Math.Abs(e.Y - _dragTabStart.Y) > 3))
+            _dragTabActive = true;
+        tabs.Cursor = _dragTabActive && TabIndexAt(e.Location) >= 0
+            ? Cursors.Hand : Cursors.Default;
+    }
+
+    private void Tabs_MouseUpReorder(object? sender, MouseEventArgs e)
+    {
+        if (_dragTabFrom >= 0 && e.Button == MouseButtons.Left)
+        {
+            if (_dragTabActive)
+            {
+                var to = TabIndexAt(e.Location);
+                if (to >= 0 && to != _dragTabFrom)
+                {
+                    var page = tabs.TabPages[_dragTabFrom];
+                    var tab = _board.Tabs[_dragTabFrom];
+                    tabs.TabPages.RemoveAt(_dragTabFrom);
+                    _board.Tabs.RemoveAt(_dragTabFrom);
+                    tabs.TabPages.Insert(to, page);
+                    _board.Tabs.Insert(to, tab);
+                    tabs.SelectedIndex = to;
+                    _board.Dirty();
+                }
+            }
+            tabs.Cursor = Cursors.Default;
+            _dragTabFrom = -1;
+            _dragTabActive = false;
+        }
     }
 
     private void Tabs_MouseUp(object? sender, MouseEventArgs e)
