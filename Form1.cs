@@ -45,13 +45,19 @@ public partial class Form1 : Form
         Controls.Add(tabs);
         ClientSize = new Size(1000, 650);
         Text = "Shortcutz";
+        try
+        {
+            using var stream = typeof(Form1).Assembly.GetManifestResourceStream("Shortcutz.app.ico");
+            if (stream is not null) Icon = new Icon(stream);
+        }
+        catch { }
         TopMost = true; // keep above other apps; PromptForm is also topmost so it stays above this
         ResumeLayout(false);
 
         _tabMenu = new ContextMenuStrip();
         _tabMenu.Items.Add("Add tab", null, (s, e) => { AddTab("New tab"); _board.Dirty(); });
         _tabMenu.Items.Add("Rename", null, RenameTab);
-        _tabMenu.Items.Add("Close", null, CloseTab);
+        _tabMenu.Items.Add("Delete", null, CloseTab);
         tabs.MouseUp += Tabs_MouseUp;
         tabs.MouseDoubleClick += Tabs_MouseDoubleClick;
         tabs.MouseDown += Tabs_MouseDown;
