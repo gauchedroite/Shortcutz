@@ -23,7 +23,8 @@ public partial class Form1 : Form
     private const string AppDataDirName = "Shortcutz";
 
     private readonly string _stateFile;
-    private readonly string _stateBak;
+    private readonly string _stateArchive;
+    private static readonly string? _sevenZip = Find7z();
     private readonly ContextMenuStrip _tabMenu;
     private readonly ContextMenuStrip _workspaceMenu;
     private readonly TabControl tabs;
@@ -77,7 +78,7 @@ public partial class Form1 : Form
         _stateFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             AppDataDirName, "state.json");
-        _stateBak = _stateFile + ".bak";
+        _stateArchive = _stateFile + ".7z";
         Directory.CreateDirectory(Path.GetDirectoryName(_stateFile)!);
         
         tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
@@ -1596,8 +1597,8 @@ public partial class Form1 : Form
         _board.ShowGridDots = _showGridDots;
         var window = new WindowState(Location.X, Location.Y, Size.Width, Size.Height);
         var json = JsonSerializer.Serialize(_board.ToState(window));
-        try { if (File.Exists(_stateFile)) File.Copy(_stateFile, _stateBak, overwrite: true); } catch { }
         File.WriteAllText(_stateFile, json);
+        ArchiveStateBackup(json);
     }
 
     private static void OpenItem(string path)
@@ -1619,6 +1620,39 @@ public partial class Form1 : Form
         {
             MessageBox.Show(ex.Message, "Could not open item", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void ArchiveStateBackup(string json)
+    {
+        // ponytail: archive backups to state.json.7z via 7z; skip silently if 7z missing
+        if (_sevenZip is null) return;
+        try
+        {
+            var name = "state_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".json";
+            var psi = new ProcessStartInfo(_sevenZip, $"a \"{_stateArchive}\" -si\"{name}\"")
+            {
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi);
+            if (p is null) return;
+            p.StandardInput.Write(json);
+            p.StandardInput.Close();
+            p.WaitForExit(5000);
+        }
+        catch { }
+    }
+
+    private static string? Find7z()
+    {
+        foreach (var p in new[]
+        {
+            @"C:\Program Files\7-Zip\7z.exe",
+            @"C:\Program Files (x86)\7-Zip\7z.exe",
+        })
+            if (File.Exists(p)) return p;
+        return null;
     }
 
     private static string? FindNotepadPlus()
