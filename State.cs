@@ -1,7 +1,7 @@
 namespace Shortcutz;
 
 // Serialization DTOs
-public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null);
+public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null);
 public sealed record TabState(string Name, List<ItemState> Items, float? Zoom = 1.0f);
 public sealed record WindowState(int X, int Y, int Width, int Height);
 public sealed record AppState(List<TabState> Tabs, int SelectedTabIndex = 0, WindowState? Window = null, bool? ShowGridDots = false);
@@ -20,14 +20,15 @@ public sealed class IconItem(string path, int x, int y, string? label) : Item(x,
     public override ItemState ToState() => new(Path, X, Y, false, null, Label);
 }
 
-public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth) : Item(x, y)
+public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth, string? color = null) : Item(x, y)
 {
     public const int DefaultWidth = 160;
     public const int MinWidth = 40;
     public const int MaxWidth = 600;
     public string Text = text;
     public int Width = width;
-    public override ItemState ToState() => new("", X, Y, true, Text, null, Width);
+    public string? Color = color;
+    public override ItemState ToState() => new("", X, Y, true, Text, null, Width, Color);
 }
 
 public sealed class Tab(string name)

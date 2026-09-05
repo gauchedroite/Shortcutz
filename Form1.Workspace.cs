@@ -13,6 +13,19 @@ public partial class Form1
     private static readonly Color NoteBackColor = Color.FromArgb(220, 255, 255, 200);
     private static readonly Color NoteSelectionBackColor = Color.FromArgb(255, 255, 240, 150);
 
+    private static Color WorkspaceBackColor => Color.FromArgb(240, 240, 240);
+
+    private static Color? ParseNoteColor(string? name) => name?.ToLowerInvariant() switch
+    {
+        "yellow" => Color.FromArgb(220, 255, 255, 150),
+        "green" => Color.FromArgb(220, 200, 255, 200),
+        "red" => Color.FromArgb(220, 255, 200, 200),
+        "gray" => WorkspaceBackColor,
+        _ => null
+    };
+
+    private static Color NoteBaseColor(NoteItem item) => ParseNoteColor(item.Color) ?? NoteBackColor;
+
     private static Color SelectionTint()
     {
         var c = SystemColors.Highlight;
@@ -25,7 +38,7 @@ public partial class Form1
     private static bool IsSelected(Control c) => c switch
     {
         Panel => c.BackColor != Color.Transparent,
-        Label => c.BackColor != NoteBackColor,
+        Label => c.BackColor != NoteBaseColor((NoteItem)c.Tag!),
         _ => false
     };
 
@@ -39,7 +52,7 @@ public partial class Form1
         }
         else if (c is Label note)
         {
-            note.BackColor = selected ? NoteSelectionBackColor : NoteBackColor;
+            note.BackColor = selected ? NoteSelectionBackColor : NoteBaseColor((NoteItem)note.Tag!);
         }
     }
 

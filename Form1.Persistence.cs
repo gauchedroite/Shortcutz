@@ -35,7 +35,7 @@ public partial class Form1
                     foreach (var it in t.Items ?? new List<ItemState>())
                     {
                         Item item = it.IsNote
-                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth)
+                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
                             : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
                         tab.Items.Add(item);
                     }

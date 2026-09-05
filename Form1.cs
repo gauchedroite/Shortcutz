@@ -189,7 +189,7 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill,
             AllowDrop = true,
-            BackColor = Color.FromArgb(240, 240, 240)
+            BackColor = WorkspaceBackColor
         };
         workspace.DragEnter += Workspace_DragEnter;
         workspace.DragDrop += Workspace_DragDrop;

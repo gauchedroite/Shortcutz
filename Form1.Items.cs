@@ -557,7 +557,7 @@ public partial class Form1
             AutoSize = false,
             Size = new Size(item.Width, 40),
             Location = new Point(item.X, item.Y),
-            BackColor = Color.FromArgb(220, 255, 255, 200),
+            BackColor = NoteBaseColor(item),
             ForeColor = SystemColors.WindowText,
             Text = item.Text,
             Font = TitleFont,
@@ -568,6 +568,13 @@ public partial class Form1
         };
 
         void EditNote() => RenameNote(item, note);
+        void SetColor(string? color)
+        {
+            item.Color = color;
+            if (!IsSelected(note))
+                note.BackColor = NoteBaseColor(item);
+            _board.Dirty();
+        }
 
         List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
         WireDrag(new[] { note },
@@ -625,6 +632,15 @@ public partial class Form1
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Edit", null, (s, e) => EditNote());
+
+        var colors = new ContextMenuStrip();
+        colors.Items.Add("Default", null, (_, _) => SetColor(null));
+        colors.Items.Add("Yellow", null, (_, _) => SetColor("yellow"));
+        colors.Items.Add("Green", null, (_, _) => SetColor("green"));
+        colors.Items.Add("Red", null, (_, _) => SetColor("red"));
+        colors.Items.Add("Gray", null, (_, _) => SetColor("gray"));
+        menu.Items.Add(new ToolStripMenuItem("Background color", null, colors.Items.Cast<ToolStripItem>().ToArray()));
+
         menu.Items.Add("Delete", null, (s, e) =>
         {
             if (IsSelected(note))
