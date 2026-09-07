@@ -31,14 +31,39 @@ public partial class Form1
             {
                 foreach (var t in state.Tabs ?? new List<TabState>())
                 {
-                    var tab = new Tab(t.Name) { Zoom = t.Zoom ?? 1.0f };
-                    foreach (var it in t.Items ?? new List<ItemState>())
+                    var tab = new Tab(t.Name);
+                    if (t.Pages is { Count: > 0 })
                     {
-                        Item item = it.IsNote
-                            ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                            : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
-                        tab.Items.Add(item);
+                        foreach (var p in t.Pages)
+                        {
+                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f };
+                            foreach (var it in p.Items ?? new List<ItemState>())
+                            {
+                                Item item = it.IsNote
+                                    ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
+                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
+                                page.Items.Add(item);
+                            }
+                            tab.Pages.Add(page);
+                        }
                     }
+                    else if (t.LegacyItems is { Count: > 0 })
+                    {
+                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f };
+                        foreach (var it in t.LegacyItems)
+                        {
+                            Item item = it.IsNote
+                                ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
+                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
+                            page.Items.Add(item);
+                        }
+                        tab.Pages.Add(page);
+                    }
+                    else
+                    {
+                        tab.Pages.Add(new Page("Page 1"));
+                    }
+                    tab.SelectedPageIndex = Math.Clamp(t.SelectedPageIndex ?? 0, 0, tab.Pages.Count - 1);
                     _board.Tabs.Add(tab);
                 }
             }
@@ -54,8 +79,8 @@ public partial class Form1
             else if (tabs.TabCount > 0)
                 tabs.SelectedIndex = Math.Clamp(state.SelectedTabIndex, 0, tabs.TabCount - 1);
 
-            if (tabs.SelectedTab is TabPage page)
-                ApplyZoom(WorkspaceFromPage(page));
+            if (SelectedWorkspace() is Panel workspace)
+                ApplyZoom(workspace);
 
             if (state.Window is not null)
             {
@@ -85,8 +110,14 @@ public partial class Form1
     {
         _board.SelectedIndex = tabs.SelectedIndex;
         _board.ShowGridDots = _showGridDots;
+        for (int i = 0; i < _board.Tabs.Count && i < tabs.TabPages.Count; i++)
+        {
+            var subTabs = SubTabsFromPage(tabs.TabPages[i]);
+            _board.Tabs[i].SelectedPageIndex = subTabs.SelectedIndex;
+        }
         var window = new WindowState(Location.X, Location.Y, Size.Width, Size.Height);
-        var json = JsonSerializer.Serialize(_board.ToState(window));
+        var options = new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+        var json = JsonSerializer.Serialize(_board.ToState(window), options);
         File.WriteAllText(_stateFile, json);
         ArchiveStateBackup(json);
     }

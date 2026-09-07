@@ -2,7 +2,13 @@ namespace Shortcutz;
 
 // Serialization DTOs
 public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null);
-public sealed record TabState(string Name, List<ItemState> Items, float? Zoom = 1.0f);
+public sealed record PageState(string Name, List<ItemState>? Items = null, float? Zoom = 1.0f);
+public sealed record TabState(string Name, List<PageState>? Pages = null,
+    int? SelectedPageIndex = 0,
+    [property: System.Text.Json.Serialization.JsonPropertyName("Items")]
+    List<ItemState>? LegacyItems = null,
+    [property: System.Text.Json.Serialization.JsonPropertyName("Zoom")]
+    float? LegacyZoom = null);
 public sealed record WindowState(int X, int Y, int Width, int Height);
 public sealed record AppState(List<TabState> Tabs, int SelectedTabIndex = 0, WindowState? Window = null, bool? ShowGridDots = false);
 
@@ -31,12 +37,20 @@ public sealed class NoteItem(string text, int x, int y, int width = NoteItem.Def
     public override ItemState ToState() => new("", X, Y, true, Text, null, Width, Color);
 }
 
-public sealed class Tab(string name)
+public sealed class Page(string name)
 {
     public string Name = name;
     public List<Item> Items = new();
     public float Zoom = 1.0f;
-    public TabState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom);
+    public PageState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom);
+}
+
+public sealed class Tab(string name)
+{
+    public string Name = name;
+    public List<Page> Pages = new();
+    public int SelectedPageIndex;
+    public TabState ToState() => new(Name, Pages.ConvertAll(p => p.ToState()), SelectedPageIndex);
 }
 
 public sealed class Board

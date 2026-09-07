@@ -135,7 +135,7 @@ public partial class Form1
     {
         if (sender is not Panel workspace || e.Data is null) return;
         var dropPoint = workspace.PointToClient(new Point(e.X, e.Y));
-        var tab = TabFromSelected(tabs);
+        var page = PageFromWorkspace(workspace);
 
         int i = 0;
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -146,7 +146,7 @@ public partial class Form1
                 var loc = SnapToGrid(workspace, new Size(110, 90),
                     new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
                 var item = new IconItem(path, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), null);
-                tab.Items.Add(item);
+                page.Items.Add(item);
                 CreateIconView(workspace, item);
                 i++;
             }
@@ -161,7 +161,7 @@ public partial class Form1
                 var loc = SnapToGrid(workspace, new Size(110, 90),
                     new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
                 var item = new IconItem(url, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), label);
-                tab.Items.Add(item);
+                page.Items.Add(item);
                 var p = CreateIconView(workspace, item);
                 if (label is null && p.Controls[1] is Label titleLabel)
                     _ = FetchUrlTitleAsync(url, item, titleLabel, p);
@@ -200,7 +200,10 @@ public partial class Form1
         if (e.Button == MouseButtons.Right)
         {
             if (workspace.GetChildAtPoint(e.Location) == null)
+            {
+                _lastWorkspaceMenuLocation = e.Location;
                 _workspaceMenu.Show(workspace, e.Location);
+            }
             return;
         }
         if (!_selecting || e.Button != MouseButtons.Left) return;
@@ -270,10 +273,9 @@ public partial class Form1
         if (workspace.GetChildAtPoint(e.Location) != null) return;
         var text = Prompt("New note", "Enter note text:", "", multiline: true);
         if (string.IsNullOrWhiteSpace(text)) return;
-        var tab = TabFromSelected(tabs);
         var loc = Clamp(workspace, new Size(120, 40), e.Location);
         var item = new NoteItem(text, (int)(loc.X / _zoom), (int)(loc.Y / _zoom));
-        tab.Items.Add(item);
+        PageFromWorkspace(workspace).Items.Add(item);
         CreateNoteView(workspace, item);
         _board.Dirty();
     }

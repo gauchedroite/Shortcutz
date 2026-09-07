@@ -123,8 +123,8 @@ public partial class Form1
         var z = NextZoom(1);
         if (Math.Abs(z - _zoom) < 0.001f) return;
         _zoom = z;
-        if (tabs.SelectedTab is TabPage page)
-            ApplyZoom(WorkspaceFromPage(page));
+        if (SelectedWorkspace() is Panel workspace)
+            ApplyZoom(workspace);
     }
 
     private void ZoomOut()
@@ -132,16 +132,16 @@ public partial class Form1
         var z = NextZoom(-1);
         if (Math.Abs(z - _zoom) < 0.001f) return;
         _zoom = z;
-        if (tabs.SelectedTab is TabPage page)
-            ApplyZoom(WorkspaceFromPage(page));
+        if (SelectedWorkspace() is Panel workspace)
+            ApplyZoom(workspace);
     }
 
     private void ResetZoom()
     {
         if (_zoom == 1f) return;
         _zoom = 1f;
-        if (tabs.SelectedTab is TabPage page)
-            ApplyZoom(WorkspaceFromPage(page));
+        if (SelectedWorkspace() is Panel workspace)
+            ApplyZoom(workspace);
     }
 
     private void ApplyZoom(Panel workspace)
@@ -329,6 +329,7 @@ public partial class Form1
                 }
             });
         }
+        menu.Items.Add("Copy", null, (s, e) => CopySelectedItems(workspace, panel));
         menu.Items.Add("Delete", null, (s, e) =>
         {
             if (IsSelected(panel))
@@ -512,7 +513,7 @@ public partial class Form1
         var displayName = item.Label ?? Path.GetFileName(item.Path);
         if (ConfirmRemove(displayName, ItemExists(item.Path)) != DialogResult.Yes) return;
         workspace.Controls.Remove(panel);
-        TabFromSelected(tabs).Items.Remove(item);
+        PageFromWorkspace(workspace).Items.Remove(item);
         DisposeItemControl(panel);
         DeleteFaviconCache(item.Path);
         _board.Dirty();
@@ -535,14 +536,69 @@ public partial class Form1
         if (MessageBox.Show(message + detail, "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        var tab = TabFromSelected(tabs);
+        var page = PageFromWorkspace(workspace);
         foreach (var c in selected)
         {
             workspace.Controls.Remove(c);
-            tab.Items.Remove((Item)c.Tag!);
+            page.Items.Remove((Item)c.Tag!);
             if (c.Tag is IconItem iconItem)
                 DeleteFaviconCache(iconItem.Path);
             DisposeItemControl(c);
+        }
+        _board.Dirty();
+    }
+
+    private static Item CloneItem(Item item) => item switch
+    {
+        IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label),
+        NoteItem n => new NoteItem(n.Text, n.X, n.Y, n.Width, n.Color),
+        _ => throw new NotSupportedException()
+    };
+
+    private void CopySelectedItems(Panel workspace, Control? source = null)
+    {
+        var selected = workspace.Controls.OfType<Control>().Where(IsSelected).ToList();
+        if (selected.Count == 0 && source is not null && IsSelectable(source))
+            selected.Add(source);
+        if (selected.Count == 0) return;
+        _clipboard.Clear();
+        _clipboard.AddRange(selected.Select(c => CloneItem((Item)c.Tag!)));
+    }
+
+    private void CutSelectedItems(Panel workspace)
+    {
+        CopySelectedItems(workspace);
+        var selected = workspace.Controls.OfType<Control>().Where(IsSelected).ToList();
+        if (selected.Count == 0) return;
+        var page = PageFromWorkspace(workspace);
+        foreach (var c in selected)
+        {
+            workspace.Controls.Remove(c);
+            page.Items.Remove((Item)c.Tag!);
+            if (c.Tag is IconItem iconItem)
+                DeleteFaviconCache(iconItem.Path);
+            DisposeItemControl(c);
+        }
+        _board.Dirty();
+    }
+
+    private void PasteItems(Point? location = null)
+    {
+        if (_clipboard.Count == 0 || SelectedWorkspace() is not Panel workspace) return;
+        var page = PageFromWorkspace(workspace);
+        int minX = _clipboard.Min(i => i.X);
+        int minY = _clipboard.Min(i => i.Y);
+        var pasteLoc = location ?? new Point(workspace.Width / 2, workspace.Height / 2);
+        var loc = SnapToGrid(workspace, new Size(1, 1), pasteLoc);
+        int dx = (int)(loc.X / _zoom) - minX;
+        int dy = (int)(loc.Y / _zoom) - minY;
+        foreach (var proto in _clipboard)
+        {
+            var copy = CloneItem(proto);
+            copy.X += dx;
+            copy.Y += dy;
+            page.Items.Add(copy);
+            CreateView(workspace, copy);
         }
         _board.Dirty();
     }
@@ -641,6 +697,7 @@ public partial class Form1
         colors.Items.Add("Gray", null, (_, _) => SetColor("gray"));
         menu.Items.Add(new ToolStripMenuItem("Background color", null, colors.Items.Cast<ToolStripItem>().ToArray()));
 
+        menu.Items.Add("Copy", null, (s, e) => CopySelectedItems(workspace, note));
         menu.Items.Add("Delete", null, (s, e) =>
         {
             if (IsSelected(note))
@@ -653,7 +710,7 @@ public partial class Form1
                     "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
             workspace.Controls.Remove(note);
-            TabFromSelected(tabs).Items.Remove(item);
+            PageFromWorkspace(workspace).Items.Remove(item);
             DisposeItemControl(note);
             _board.Dirty();
         });
