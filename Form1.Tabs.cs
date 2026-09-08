@@ -47,11 +47,16 @@ public partial class Form1
             if (_dragTabActive)
             {
                 var to = TabIndexAt(tc, e.Location);
-                if (to >= 0 && to != _dragTabFrom)
+                if (to >= 0 && to != _dragTabFrom && _dragTabFrom < tc.TabPages.Count)
                 {
                     var page = tc.TabPages[_dragTabFrom];
                     var models = ModelListFor(tc);
                     var model = models?[_dragTabFrom];
+
+                    // Move focus off any child control (e.g. a text page's TextBox) before
+                    // detaching the tab page; removing a focused control can crash WinForms.
+                    ActiveControl = null;
+
                     tc.TabPages.RemoveAt(_dragTabFrom);
                     models?.RemoveAt(_dragTabFrom);
                     tc.TabPages.Insert(to, page);
@@ -170,6 +175,7 @@ public partial class Form1
     private void Tabs_DrawItem(object? sender, DrawItemEventArgs e)
     {
         if (sender is not TabControl tc) return;
+        if (e.Index < 0 || e.Index >= tc.TabPages.Count) return;
         using var bg = new SolidBrush(e.BackColor);
         e.Graphics.FillRectangle(bg, e.Bounds);
 

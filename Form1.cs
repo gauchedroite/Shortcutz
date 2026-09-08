@@ -72,6 +72,7 @@ public partial class Form1 : Form
 
         _subTabMenu = new ContextMenuStrip();
         _subTabMenu.Items.Add("Add page", null, (s, e) => { AddPage("New page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
+        _subTabMenu.Items.Add("Add text page", null, (s, e) => { AddTextPage("New text page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
         _subTabMenu.Items.Add("Rename", null, RenameSubTab);
         _subTabMenu.Items.Add("Delete", null, CloseSubTab);
 
@@ -114,6 +115,8 @@ public partial class Form1 : Form
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (ActiveControl is TextBox) return;
+
         if (e.KeyCode == Keys.F1)
         {
             e.Handled = true;
@@ -245,6 +248,15 @@ public partial class Form1 : Form
         return page;
     }
 
+    private Page AddTextPage(string name, int index = -1)
+    {
+        var page = AddPage(name, index);
+        page.Type = "Text";
+        if (SelectedWorkspace() is Panel workspace)
+            CreateTextBox(workspace, page);
+        return page;
+    }
+
     private TabPage CreateTabPage(Tab tab, int index = -1)
     {
         var page = new TabPage(tab.Name);
@@ -279,11 +291,35 @@ public partial class Form1 : Form
     {
         var subPage = new TabPage(page.Name);
         var workspace = CreateWorkspace(page);
-        foreach (var item in page.Items)
-            CreateView(workspace, item);
+        if (page.Type == "Text")
+            CreateTextBox(workspace, page);
+        else
+            foreach (var item in page.Items)
+                CreateView(workspace, item);
         subPage.Controls.Add(workspace);
         subPage.Tag = page;
         return subPage;
+    }
+
+    private TextBox CreateTextBox(Panel workspace, Page page)
+    {
+        var box = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            AcceptsReturn = true,
+            WordWrap = true,
+            ScrollBars = ScrollBars.Vertical,
+            Font = TitleFont,
+            Text = page.Text
+        };
+        box.TextChanged += (s, e) =>
+        {
+            page.Text = box.Text;
+            _board.Dirty();
+        };
+        workspace.Controls.Add(box);
+        return box;
     }
 
     private Panel CreateWorkspace(Page page)

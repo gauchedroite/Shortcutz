@@ -36,7 +36,7 @@ public partial class Form1
                     {
                         foreach (var p in t.Pages)
                         {
-                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f };
+                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "" };
                             foreach (var it in p.Items ?? new List<ItemState>())
                             {
                                 Item item = it.IsNote
@@ -49,7 +49,7 @@ public partial class Form1
                     }
                     else if (t.LegacyItems is { Count: > 0 })
                     {
-                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f };
+                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f, Type = "Board", Text = "" };
                         foreach (var it in t.LegacyItems)
                         {
                             Item item = it.IsNote
