@@ -15,16 +15,25 @@ public partial class Form1
 
     private static Color WorkspaceBackColor => Color.FromArgb(240, 240, 240);
 
-    private static Color? ParseNoteColor(string? name) => name?.ToLowerInvariant() switch
+    private static Color? ParseColor(string? name) => name?.ToLowerInvariant() switch
     {
         "yellow" => Color.FromArgb(220, 255, 255, 150),
         "green" => Color.FromArgb(220, 200, 255, 200),
         "red" => Color.FromArgb(220, 255, 200, 200),
         "gray" => WorkspaceBackColor,
+        "transparent" => Color.Transparent,
         _ => null
     };
 
-    private static Color NoteBaseColor(NoteItem item) => ParseNoteColor(item.Color) ?? NoteBackColor;
+    private static Color NoteBaseColor(NoteItem item) => ParseColor(item.Color) ?? NoteBackColor;
+
+    private static Color IconBaseColor(IconItem item) => ParseColor(item.Color) ?? Color.Transparent;
+
+    private static Color IconSelectionColor(IconItem item)
+    {
+        var baseColor = IconBaseColor(item);
+        return baseColor.A == 0 ? SelectionTint() : ControlPaint.Light(baseColor, 0.7f);
+    }
 
     private static Color SelectionTint()
     {
@@ -37,6 +46,7 @@ public partial class Form1
 
     private static bool IsSelected(Control c) => c switch
     {
+        Panel p when p.Tag is IconItem icon => p.BackColor != IconBaseColor(icon),
         Panel => c.BackColor != Color.Transparent,
         Label => c.BackColor != NoteBaseColor((NoteItem)c.Tag!),
         _ => false
@@ -46,7 +56,10 @@ public partial class Form1
     {
         if (c is Panel p)
         {
-            p.BackColor = selected ? SelectionTint() : Color.Transparent;
+            if (p.Tag is IconItem icon)
+                p.BackColor = selected ? IconSelectionColor(icon) : IconBaseColor(icon);
+            else
+                p.BackColor = selected ? SelectionTint() : Color.Transparent;
             if (p.Controls.Count > 1 && p.Controls[1] is Label title)
                 title.ForeColor = SystemColors.WindowText;
         }

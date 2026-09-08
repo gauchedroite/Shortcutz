@@ -19,11 +19,12 @@ public abstract class Item(int x, int y)
     public abstract ItemState ToState();
 }
 
-public sealed class IconItem(string path, int x, int y, string? label) : Item(x, y)
+public sealed class IconItem(string path, int x, int y, string? label, string? color = null) : Item(x, y)
 {
     public string Path = path;
     public string? Label = label;
-    public override ItemState ToState() => new(Path, X, Y, false, null, Label);
+    public string? Color = color;
+    public override ItemState ToState() => new(Path, X, Y, false, null, Label, null, Color);
 }
 
 public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth, string? color = null) : Item(x, y)

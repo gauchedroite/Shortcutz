@@ -41,7 +41,7 @@ public partial class Form1
                             {
                                 Item item = it.IsNote
                                     ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
+                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color);
                                 page.Items.Add(item);
                             }
                             tab.Pages.Add(page);
@@ -54,7 +54,7 @@ public partial class Form1
                         {
                             Item item = it.IsNote
                                 ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label);
+                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color);
                             page.Items.Add(item);
                         }
                         tab.Pages.Add(page);

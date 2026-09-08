@@ -252,7 +252,7 @@ public partial class Form1
         {
             Size = new Size(labelWidth, panelHeight),
             Location = new Point(item.X, item.Y),
-            BackColor = Color.Transparent,
+            BackColor = IconBaseColor(item),
             Cursor = Cursors.Hand,
             Tag = item
         };
@@ -313,6 +313,13 @@ public partial class Form1
                 e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 2, panel.Height - 2);
             };
 
+        void SetColor(string? color)
+        {
+            item.Color = color;
+            panel.BackColor = IsSelected(panel) ? IconSelectionColor(item) : IconBaseColor(item);
+            _board.Dirty();
+        }
+
         var menu = new ContextMenuStrip();
         menu.Items.Add("Rename", null, (s, e) => RenameIcon(item, title, panel));
         if (File.Exists(item.Path))
@@ -330,6 +337,15 @@ public partial class Form1
             });
         }
         menu.Items.Add("Copy", null, (s, e) => CopySelectedItems(workspace, panel));
+
+        var colors = new ContextMenuStrip();
+        colors.Items.Add("Default", null, (_, _) => SetColor(null));
+        colors.Items.Add("Yellow", null, (_, _) => SetColor("yellow"));
+        colors.Items.Add("Green", null, (_, _) => SetColor("green"));
+        colors.Items.Add("Red", null, (_, _) => SetColor("red"));
+        colors.Items.Add("Transparent", null, (_, _) => SetColor("transparent"));
+        menu.Items.Add(new ToolStripMenuItem("Background color", null, colors.Items.Cast<ToolStripItem>().ToArray()));
+
         menu.Items.Add("Delete", null, (s, e) =>
         {
             if (IsSelected(panel))
@@ -550,7 +566,7 @@ public partial class Form1
 
     private static Item CloneItem(Item item) => item switch
     {
-        IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label),
+        IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label, i.Color),
         NoteItem n => new NoteItem(n.Text, n.X, n.Y, n.Width, n.Color),
         _ => throw new NotSupportedException()
     };
@@ -694,7 +710,7 @@ public partial class Form1
         colors.Items.Add("Yellow", null, (_, _) => SetColor("yellow"));
         colors.Items.Add("Green", null, (_, _) => SetColor("green"));
         colors.Items.Add("Red", null, (_, _) => SetColor("red"));
-        colors.Items.Add("Gray", null, (_, _) => SetColor("gray"));
+        colors.Items.Add("Transparent", null, (_, _) => SetColor("transparent"));
         menu.Items.Add(new ToolStripMenuItem("Background color", null, colors.Items.Cast<ToolStripItem>().ToArray()));
 
         menu.Items.Add("Copy", null, (s, e) => CopySelectedItems(workspace, note));
