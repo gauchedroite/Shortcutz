@@ -166,4 +166,16 @@ public partial class Form1
         }
         _board.Dirty();
     }
+
+    private void Tabs_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not TabControl tc) return;
+        using var bg = new SolidBrush(e.BackColor);
+        e.Graphics.FillRectangle(bg, e.Bounds);
+
+        var isSelected = e.Index == tc.SelectedIndex;
+        using var font = new Font(e.Font ?? tc.Font, isSelected ? FontStyle.Bold : FontStyle.Regular);
+        TextRenderer.DrawText(e.Graphics, tc.TabPages[e.Index].Text, font, e.Bounds, e.ForeColor,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
 }

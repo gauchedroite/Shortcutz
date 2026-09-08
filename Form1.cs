@@ -44,7 +44,8 @@ public partial class Form1 : Form
 
     public Form1()
     {
-        tabs = new TabControl { Dock = DockStyle.Fill };
+        tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
+        tabs.DrawItem += Tabs_DrawItem;
         SuspendLayout();
         Controls.Add(tabs);
         ClientSize = new Size(1000, 650);
@@ -247,7 +248,8 @@ public partial class Form1 : Form
     private TabPage CreateTabPage(Tab tab, int index = -1)
     {
         var page = new TabPage(tab.Name);
-        var subTabs = new TabControl { Dock = DockStyle.Fill, Tag = tab.Pages };
+        var subTabs = new TabControl { Dock = DockStyle.Fill, Tag = tab.Pages, DrawMode = TabDrawMode.OwnerDrawFixed };
+        subTabs.DrawItem += Tabs_DrawItem;
         subTabs.MouseUp += SubTabs_MouseUp;
         subTabs.MouseDoubleClick += SubTabs_MouseDoubleClick;
         subTabs.MouseDown += SubTabs_MouseDown;
