@@ -101,7 +101,6 @@ public partial class Form1 : Form
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
 
-        _board.Changed += SaveState;
         FormClosing += (s, e) => SaveState();
         KeyPreview = true;
         KeyDown += Form1_KeyDown;
@@ -115,6 +114,13 @@ public partial class Form1 : Form
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Control && e.KeyCode == Keys.S)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            SaveState();
+            return;
+        }
         if (ActiveControl is TextBox) return;
 
         if (e.KeyCode == Keys.F1)
@@ -186,26 +192,18 @@ public partial class Form1 : Form
 
     private void ReloadState()
     {
-        _board.Changed -= SaveState;
-        try
+        foreach (TabPage page in tabs.TabPages.Cast<TabPage>().ToList())
         {
-            foreach (TabPage page in tabs.TabPages.Cast<TabPage>().ToList())
+            var subTabs = SubTabsFromPage(page);
+            foreach (TabPage sub in subTabs.TabPages.Cast<TabPage>().ToList())
             {
-                var subTabs = SubTabsFromPage(page);
-                foreach (TabPage sub in subTabs.TabPages.Cast<TabPage>().ToList())
-                {
-                    var workspace = WorkspaceFromSubPage(sub);
-                    foreach (Control c in workspace.Controls) DisposeItemControl(c);
-                }
+                var workspace = WorkspaceFromSubPage(sub);
+                foreach (Control c in workspace.Controls) DisposeItemControl(c);
             }
-            tabs.TabPages.Clear();
-            _board.Tabs.Clear();
-            LoadState();
         }
-        finally
-        {
-            _board.Changed += SaveState;
-        }
+        tabs.TabPages.Clear();
+        _board.Tabs.Clear();
+        LoadState();
     }
 
     // ---------- tabs ----------
@@ -313,11 +311,7 @@ public partial class Form1 : Form
             Font = TitleFont,
             Text = page.Text
         };
-        box.TextChanged += (s, e) =>
-        {
-            page.Text = box.Text;
-            _board.Dirty();
-        };
+        box.TextChanged += (s, e) => page.Text = box.Text;
         workspace.Controls.Add(box);
         return box;
     }
