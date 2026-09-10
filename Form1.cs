@@ -28,6 +28,11 @@ public partial class Form1 : Form
     private readonly ContextMenuStrip _tabMenu;
     private readonly ContextMenuStrip _subTabMenu;
     private readonly ContextMenuStrip _workspaceMenu;
+    private readonly Stack<(int Top, int Sub)> _tabHistoryBack = new();
+    private readonly Stack<(int Top, int Sub)> _tabHistoryForward = new();
+    private (int Top, int Sub) _currentTabPair = (-1, -1);
+    private bool _tabHistoryNavigating;
+    private bool _tabPairInitialized;
     private readonly TabControl tabs;
     private readonly Board _board = new();
     private static readonly List<Item> _clipboard = new();
@@ -101,6 +106,9 @@ public partial class Form1 : Form
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
 
+        _currentTabPair = GetCurrentTabPair();
+        _tabPairInitialized = true;
+
         FormClosing += (s, e) => SaveState();
         KeyPreview = true;
         KeyDown += Form1_KeyDown;
@@ -108,6 +116,7 @@ public partial class Form1 : Form
 
     private void Tabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        RecordTabPair();
         if (SelectedWorkspace() is Panel workspace)
             ApplyZoom(workspace);
     }
@@ -122,6 +131,21 @@ public partial class Form1 : Form
             return;
         }
         if (ActiveControl is TextBox) return;
+
+        if (e.Control && e.KeyCode == Keys.Left)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            NavigateTabPairHistory(back: true);
+            return;
+        }
+        if (e.Control && e.KeyCode == Keys.Right)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            NavigateTabPairHistory(back: false);
+            return;
+        }
 
         if (e.KeyCode == Keys.F1)
         {
@@ -203,8 +227,56 @@ public partial class Form1 : Form
         }
         tabs.TabPages.Clear();
         _board.Tabs.Clear();
+        _tabHistoryBack.Clear();
+        _tabHistoryForward.Clear();
+        _currentTabPair = (-1, -1);
+        _tabPairInitialized = false;
         LoadState();
+        _currentTabPair = GetCurrentTabPair();
+        _tabPairInitialized = true;
     }
+
+    private void NavigateTabPairHistory(bool back)
+    {
+        var source = back ? _tabHistoryBack : _tabHistoryForward;
+        var dest = back ? _tabHistoryForward : _tabHistoryBack;
+        var current = GetCurrentTabPair();
+        while (source.Count > 0)
+        {
+            var candidate = source.Peek();
+            if (IsTabPairValid(candidate) && candidate != current) break;
+            source.Pop();
+        }
+        if (source.Count == 0) return;
+        var target = source.Pop();
+        dest.Push(current);
+        _tabHistoryNavigating = true;
+        tabs.SelectedIndex = target.Top;
+        if (SelectedSubTabs is TabControl subTabs && target.Sub >= 0 && target.Sub < subTabs.TabPages.Count)
+            subTabs.SelectedIndex = target.Sub;
+        _currentTabPair = GetCurrentTabPair();
+        _tabHistoryNavigating = false;
+    }
+
+    private void RecordTabPair()
+    {
+        if (_tabHistoryNavigating || !_tabPairInitialized) return;
+        var pair = GetCurrentTabPair();
+        if (pair != _currentTabPair)
+        {
+            _tabHistoryBack.Push(_currentTabPair);
+            _tabHistoryForward.Clear();
+            _currentTabPair = pair;
+        }
+    }
+
+    private (int Top, int Sub) GetCurrentTabPair() =>
+        (tabs.SelectedIndex, SelectedSubTabs?.SelectedIndex ?? -1);
+
+    private bool IsTabPairValid((int Top, int Sub) pair) =>
+        pair.Top >= 0 && pair.Top < tabs.TabPages.Count &&
+        SubTabsFromPage(tabs.TabPages[pair.Top]) is TabControl subTabs &&
+        pair.Sub >= 0 && pair.Sub < subTabs.TabPages.Count;
 
     // ---------- tabs ----------
 
@@ -339,6 +411,7 @@ public partial class Form1 : Form
 
     private void SubTabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        RecordTabPair();
         if (SelectedWorkspace() is Panel workspace)
             ApplyZoom(workspace);
     }
