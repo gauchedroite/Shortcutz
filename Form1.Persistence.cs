@@ -85,10 +85,17 @@ public partial class Form1
             if (state.Window is not null)
             {
                 StartPosition = FormStartPosition.Manual;
-                Location = new Point(state.Window.X, state.Window.Y);
-                Size = new Size(
-                    Math.Max(MinimumSize.Width, state.Window.Width),
-                    Math.Max(MinimumSize.Height, state.Window.Height));
+                var w = Math.Max(MinimumSize.Width, state.Window.Width);
+                var h = Math.Max(MinimumSize.Height, state.Window.Height);
+                // Clamp onto a real screen: a saved position from a now-disconnected
+                // monitor would otherwise strand the window off-screen (taskbar icon only).
+                var screen = Screen.AllScreens.FirstOrDefault(s => s.Bounds.Contains(state.Window.X, state.Window.Y))
+                             ?? Screen.PrimaryScreen!;
+                var area = screen.WorkingArea;
+                var x = Math.Clamp(state.Window.X, area.Left, area.Right - 80);
+                var y = Math.Clamp(state.Window.Y, area.Top, area.Bottom - 40);
+                Location = new Point(x, y);
+                Size = new Size(w, h);
             }
         }
         catch (Exception ex)
