@@ -71,13 +71,17 @@ public partial class Form1
             _board.ShowGridDots = state.ShowGridDots ?? false;
             _showGridDots = _board.ShowGridDots;
 
+            _suppressPopulate = true;
             foreach (var tab in _board.Tabs)
                 CreateTabPage(tab);
+            _suppressPopulate = false;
 
             if (tabs.TabPages.Count == 0)
                 AddTab("Board");
             else if (tabs.TabCount > 0)
                 tabs.SelectedIndex = Math.Clamp(state.SelectedTabIndex, 0, tabs.TabCount - 1);
+
+            PopulateSubPage(SelectedSubPage);
 
             if (SelectedWorkspace() is Panel workspace)
                 ApplyZoom(workspace);

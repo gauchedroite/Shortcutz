@@ -47,6 +47,10 @@ public partial class Form1 : Form
     private const float ZoomMax = 3f;
     private const float ZoomStep = 0.15f;
 
+    // Lazy page population: build a page's controls only when it becomes visible.
+    private bool _suppressPopulate;
+    private readonly HashSet<TabPage> _populatedSubPages = new();
+
     public Form1()
     {
         tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
@@ -117,6 +121,7 @@ public partial class Form1 : Form
     private void Tabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
         RecordTabPair();
+        PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
             ApplyZoom(workspace);
     }
@@ -227,6 +232,7 @@ public partial class Form1 : Form
         }
         tabs.TabPages.Clear();
         _board.Tabs.Clear();
+        _populatedSubPages.Clear();
         _tabHistoryBack.Clear();
         _tabHistoryForward.Clear();
         _currentTabPair = (-1, -1);
@@ -361,14 +367,22 @@ public partial class Form1 : Form
     {
         var subPage = new TabPage(page.Name);
         var workspace = CreateWorkspace(page);
+        subPage.Controls.Add(workspace);
+        subPage.Tag = page;
+        return subPage;
+    }
+
+    private void PopulateSubPage(TabPage? subPage)
+    {
+        if (_suppressPopulate || subPage is null || _populatedSubPages.Contains(subPage)) return;
+        _populatedSubPages.Add(subPage);
+        var page = PageFromSubPage(subPage);
+        var workspace = WorkspaceFromSubPage(subPage);
         if (page.Type == "Text")
             CreateTextBox(workspace, page);
         else
             foreach (var item in page.Items)
                 CreateView(workspace, item);
-        subPage.Controls.Add(workspace);
-        subPage.Tag = page;
-        return subPage;
     }
 
     private TextBox CreateTextBox(Panel workspace, Page page)
@@ -412,6 +426,7 @@ public partial class Form1 : Form
     private void SubTabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
         RecordTabPair();
+        PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
             ApplyZoom(workspace);
     }

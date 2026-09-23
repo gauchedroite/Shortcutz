@@ -269,15 +269,7 @@ public partial class Form1
         };
         if (IsUrl(item.Path))
         {
-            var cache = GetFaviconCachePath(item.Path);
-            if (File.Exists(cache))
-            {
-                try { icon.Image = LoadFaviconBitmap(cache); } catch { }
-            }
-            if (icon.Image is null)
-            {
-                icon.Image = GetIconBitmap(item.Path, false); // chrome placeholder until favicon loads
-            }
+            icon.Image = GetIconBitmap(item.Path, false); // chrome placeholder; favicon loaded async by FetchUrlFaviconAsync
             icon.Tag = icon.Image;
             _ = FetchUrlFaviconAsync(item.Path, panel, icon);
         }

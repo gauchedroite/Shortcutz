@@ -156,6 +156,7 @@ public partial class Form1
             foreach (Control c in workspace.Controls) DisposeItemControl(c);
             var tab = TabFromPage(tabs.SelectedTab!);
             tab.Pages.Remove(pageModel);
+            _populatedSubPages.Remove(page);
             tc.TabPages.Remove(page);
         }
         else if (model is Tab tabModel)
@@ -165,6 +166,7 @@ public partial class Form1
             {
                 var workspace = WorkspaceFromSubPage(sub);
                 foreach (Control c in workspace.Controls) DisposeItemControl(c);
+                _populatedSubPages.Remove(sub);
             }
             _board.Tabs.Remove(tabModel);
             tabs.TabPages.Remove(page);
