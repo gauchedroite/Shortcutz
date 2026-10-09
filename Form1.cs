@@ -57,6 +57,7 @@ public partial class Form1 : Form
         tabs.DrawItem += Tabs_DrawItem;
         SuspendLayout();
         Controls.Add(tabs);
+        InitSearch();
         ClientSize = new Size(1000, 650);
         Text = "Shortcutz";
         try
@@ -133,6 +134,27 @@ public partial class Form1 : Form
             e.Handled = true;
             e.SuppressKeyPress = true;
             SaveState();
+            return;
+        }
+        if (e.KeyCode == Keys.Escape && _searchPanel.Visible)
+        {
+            e.Handled = true;
+            HideSearch();
+            return;
+        }
+        // While search is open, Up/Down stay usable even when tab navigation stole focus
+        if (_searchPanel.Visible && ActiveControl is not TextBox && e.KeyCode is Keys.Up or Keys.Down)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            MoveSearchSelection(e.KeyCode == Keys.Down ? 1 : -1);
+            return;
+        }
+        if (e.Control && e.KeyCode == Keys.F)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            ToggleSearch();
             return;
         }
         if (ActiveControl is TextBox) return;
