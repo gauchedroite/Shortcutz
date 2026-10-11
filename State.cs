@@ -1,7 +1,7 @@
 namespace Shortcutz;
 
 // Serialization DTOs
-public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null);
+public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null, bool? Compact = null);
 public sealed record PageState(string Name, List<ItemState>? Items = null, float? Zoom = 1.0f, string? Type = "Board", string? Text = null, bool? CompactIcons = null);
 public sealed record TabState(string Name, List<PageState>? Pages = null,
     int? SelectedPageIndex = 0,
@@ -10,7 +10,7 @@ public sealed record TabState(string Name, List<PageState>? Pages = null,
     [property: System.Text.Json.Serialization.JsonPropertyName("Zoom")]
     float? LegacyZoom = null);
 public sealed record WindowState(int X, int Y, int Width, int Height);
-// CompactIcons is the legacy app-wide setting; new saves store it on each page.
+// CompactIcons fields are kept only to migrate older saved states.
 public sealed record AppState(List<TabState> Tabs, int SelectedTabIndex = 0, WindowState? Window = null, bool? ShowGridDots = false, bool? CompactIcons = null);
 
 // Model (source of truth; controls are views over this)
@@ -25,7 +25,8 @@ public sealed class IconItem(string path, int x, int y, string? label, string? c
     public string Path = path;
     public string? Label = label;
     public string? Color = color;
-    public override ItemState ToState() => new(Path, X, Y, false, null, Label, null, Color);
+    public bool Compact;
+    public override ItemState ToState() => new(Path, X, Y, false, null, Label, null, Color, Compact);
 }
 
 public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth, string? color = null) : Item(x, y)
@@ -46,8 +47,7 @@ public sealed class Page(string name)
     public string Text = "";
     public List<Item> Items = new();
     public float Zoom = 1.0f;
-    public bool CompactIcons;
-    public PageState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom, Type, string.IsNullOrWhiteSpace(Text) ? null : Text, CompactIcons);
+    public PageState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom, Type, string.IsNullOrWhiteSpace(Text) ? null : Text);
 }
 
 public sealed class Tab(string name)

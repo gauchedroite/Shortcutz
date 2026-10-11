@@ -36,12 +36,13 @@ public partial class Form1
                     {
                         foreach (var p in t.Pages)
                         {
-                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, CompactIcons = p.CompactIcons ?? state.CompactIcons ?? false, Type = p.Type ?? "Board", Text = p.Text ?? "" };
+                            var legacyCompactIcons = p.CompactIcons ?? state.CompactIcons ?? false;
+                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "" };
                             foreach (var it in p.Items ?? new List<ItemState>())
                             {
                                 Item item = it.IsNote
                                     ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color);
+                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? legacyCompactIcons };
                                 page.Items.Add(item);
                             }
                             tab.Pages.Add(page);
@@ -49,19 +50,19 @@ public partial class Form1
                     }
                     else if (t.LegacyItems is { Count: > 0 })
                     {
-                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f, CompactIcons = state.CompactIcons ?? false, Type = "Board", Text = "" };
+                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f, Type = "Board", Text = "" };
                         foreach (var it in t.LegacyItems)
                         {
                             Item item = it.IsNote
                                 ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color);
+                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? state.CompactIcons ?? false };
                             page.Items.Add(item);
                         }
                         tab.Pages.Add(page);
                     }
                     else
                     {
-                        tab.Pages.Add(new Page("Page 1") { CompactIcons = state.CompactIcons ?? false });
+                        tab.Pages.Add(new Page("Page 1"));
                     }
                     tab.SelectedPageIndex = Math.Clamp(t.SelectedPageIndex ?? 0, 0, tab.Pages.Count - 1);
                     _board.Tabs.Add(tab);

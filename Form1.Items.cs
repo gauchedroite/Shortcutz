@@ -169,7 +169,7 @@ public partial class Form1
         var title = panel.Controls.OfType<Label>().First(l => l.Tag is string);
         var icon = panel.Controls.OfType<Label>().First(l => l.Tag is not null && l.Tag is not string);
         var displayName = title.Tag?.ToString() ?? "";
-        var compactIcons = PageFromWorkspace((Panel)panel.Parent!).CompactIcons;
+        var compactIcons = item.Compact;
 
         var padding = (int)((compactIcons ? 2 : 6) * _zoom);
         var iconWidth = (int)((compactIcons ? 16 : 60) * _zoom);
@@ -304,7 +304,7 @@ public partial class Form1
         };
         title.Paint += (s, e) =>
             TextRenderer.DrawText(e.Graphics, (string)title.Tag!, title.Font,
-                title.ClientRectangle, title.ForeColor, PageFromWorkspace(workspace).CompactIcons ? CompactTitleFlags : TitleFlags);
+                title.ClientRectangle, title.ForeColor, item.Compact ? CompactTitleFlags : TitleFlags);
 
         panel.Controls.Add(icon);
         panel.Controls.Add(title);
@@ -404,7 +404,7 @@ public partial class Form1
                         DisposeDragGhost(g, workspace);
                 dragGroup = null;
                 var clickPoint = panel.PointToClient(ctrl.PointToScreen(e.Location));
-                if (title.Bounds.Contains(clickPoint) && !PageFromWorkspace(workspace).CompactIcons)
+                if (title.Bounds.Contains(clickPoint) && !item.Compact)
                 {
                     RenameIcon(item, title, panel);
                     return;
@@ -431,12 +431,11 @@ public partial class Form1
             onDragEnd: () =>
             {
                 if (dragGroup is null) return;
-                var compactIcons = PageFromWorkspace(workspace).CompactIcons;
                 var moving = dragGroup.Select(x => x.c).ToHashSet();
                 var placed = new List<Rectangle>();
                 foreach (var (c, i, _, g) in dragGroup)
                 {
-                    c.Location = compactIcons && i is IconItem
+                    c.Location = i is IconItem iconItem && iconItem.Compact
                         ? SnapCompactIconToList(workspace, c, g.Location, moving, placed)
                         : SnapToGrid(workspace, c.Size, g.Location);
                     i.X = (int)(c.Left / _zoom);
@@ -480,7 +479,7 @@ public partial class Form1
         title.Tag = newLabel;
         ApplyZoomToControl(panel);
         var workspace = (Panel)panel.Parent!;
-        if (PageFromWorkspace(workspace).CompactIcons)
+        if (item.Compact)
             PlaceCompactIconInList(workspace, panel);
         title.Invalidate();
     }
@@ -561,7 +560,7 @@ public partial class Form1
 
     private static Item CloneItem(Item item) => item switch
     {
-        IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label, i.Color),
+        IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label, i.Color) { Compact = i.Compact },
         NoteItem n => new NoteItem(n.Text, n.X, n.Y, n.Width, n.Color),
         _ => throw new NotSupportedException()
     };
@@ -609,8 +608,11 @@ public partial class Form1
             copy.X += dx;
             copy.Y += dy;
             page.Items.Add(copy);
-            if (copy is IconItem icon && page.CompactIcons)
-                PlaceCompactIconInList(workspace, CreateIconView(workspace, icon));
+            if (copy is IconItem icon)
+            {
+                var panel = CreateIconView(workspace, icon);
+                if (icon.Compact) PlaceCompactIconInList(workspace, panel);
+            }
             else
                 CreateView(workspace, copy);
         }

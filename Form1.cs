@@ -165,9 +165,30 @@ public partial class Form1 : Form
             e.SuppressKeyPress = true;
             if (SelectedWorkspace() is Panel workspace)
             {
-                var page = PageFromWorkspace(workspace);
-                page.CompactIcons = !page.CompactIcons;
-                ApplyZoom(workspace);
+                var icons = workspace.Controls.OfType<Panel>()
+                    .Where(p => p.Tag is IconItem && IsSelected(p))
+                    .ToList();
+                if (icons.Count == 0) return;
+                var compact = icons.Any(p => !((IconItem)p.Tag!).Compact);
+                foreach (var panel in icons)
+                {
+                    ((IconItem)panel.Tag!).Compact = compact;
+                    ApplyZoomToControl(panel);
+                }
+                if (compact)
+                {
+                    var moving = icons.Cast<Control>().ToHashSet();
+                    var placed = new List<Rectangle>();
+                    foreach (var panel in icons)
+                    {
+                        panel.Location = SnapCompactIconToList(workspace, panel, panel.Location, moving, placed);
+                        var item = (IconItem)panel.Tag!;
+                        item.X = (int)(panel.Left / _zoom);
+                        item.Y = (int)(panel.Top / _zoom);
+                        placed.Add(panel.Bounds);
+                    }
+                }
+                _board.Dirty();
             }
             return;
         }

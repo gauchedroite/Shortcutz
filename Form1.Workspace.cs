@@ -149,7 +149,7 @@ public partial class Form1
         if (sender is not Panel workspace || e.Data is null) return;
         var dropPoint = workspace.PointToClient(new Point(e.X, e.Y));
         var page = PageFromWorkspace(workspace);
-        var iconSize = page.CompactIcons ? new Size((int)(190 * _zoom), (int)(GridSize * _zoom)) : new Size(110, 90);
+        var iconSize = new Size(110, 90);
 
         int i = 0;
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -161,8 +161,7 @@ public partial class Form1
                     new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
                 var item = new IconItem(path, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), null);
                 page.Items.Add(item);
-                var panel = CreateIconView(workspace, item);
-                if (page.CompactIcons) PlaceCompactIconInList(workspace, panel);
+                CreateIconView(workspace, item);
                 i++;
             }
         }
@@ -178,7 +177,6 @@ public partial class Form1
                 var item = new IconItem(url, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), label);
                 page.Items.Add(item);
                 var p = CreateIconView(workspace, item);
-                if (page.CompactIcons) PlaceCompactIconInList(workspace, p);
                 if (label is null && p.Controls[1] is Label titleLabel)
                     _ = FetchUrlTitleAsync(url, item, titleLabel, p);
             }
