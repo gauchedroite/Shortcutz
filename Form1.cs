@@ -17,6 +17,8 @@ public partial class Form1 : Form
     private const TextFormatFlags TitleFlags =
         TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl |
         TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPrefix;
+    private const TextFormatFlags CompactTitleFlags =
+        TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
@@ -155,6 +157,18 @@ public partial class Form1 : Form
             e.Handled = true;
             e.SuppressKeyPress = true;
             ToggleSearch();
+            return;
+        }
+        if (e.Control && e.KeyCode == Keys.M)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            if (SelectedWorkspace() is Panel workspace)
+            {
+                var page = PageFromWorkspace(workspace);
+                page.CompactIcons = !page.CompactIcons;
+                ApplyZoom(workspace);
+            }
             return;
         }
         if (ActiveControl is TextBox) return;

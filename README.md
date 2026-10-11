@@ -18,6 +18,7 @@ Built with .NET 10 Windows Forms.
   double-click to edit, Shift+Enter for line breaks.
 - **Zoom** — Ctrl + `+` / `-` to zoom in/out, Ctrl + `0` to reset. Per-tab zoom
   is persisted.
+- **Compact icons** — Ctrl + `M` toggles small icons with labels on the right on the current page.
 - **Open in Notepad++** — Shift+double-click a file item to open it in
   Notepad++ regardless of its extension.
 - **Always on top** — the window stays above other apps.
@@ -30,6 +31,7 @@ Built with .NET 10 Windows Forms.
 | Rename selected item / tab | Double-click, or `F2` |
 | Delete selected items | `Delete` |
 | Search all content | `Ctrl+F` |
+| Toggle compact icon layout on current page | `Ctrl+M` |
 | Reload state from disk | `Ctrl+R` |
 | Zoom in / out | `Ctrl` + `+` / `Ctrl` + `-` |
 | Reset zoom | `Ctrl` + `0` |

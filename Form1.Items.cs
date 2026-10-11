@@ -27,7 +27,7 @@ public partial class Form1
 
     // Shared drag logic for any draggable control (and its child subcontrols that
     // should all act as one draggable region, e.g. icon panel + icon + title).
-    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action<Control>? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null)
+    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action<Control, MouseEventArgs>? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null)
     {
         bool dragging = false;
         bool doubleClick = false;
@@ -40,7 +40,7 @@ public partial class Form1
                 if (e.Clicks == 2)
                 {
                     doubleClick = true;
-                    onDoubleClick?.Invoke(c);
+                    onDoubleClick?.Invoke(c, e);
                     return;
                 }
                 doubleClick = false;
@@ -169,19 +169,29 @@ public partial class Form1
         var title = panel.Controls.OfType<Label>().First(l => l.Tag is string);
         var icon = panel.Controls.OfType<Label>().First(l => l.Tag is not null && l.Tag is not string);
         var displayName = title.Tag?.ToString() ?? "";
+        var compactIcons = PageFromWorkspace((Panel)panel.Parent!).CompactIcons;
 
-        var labelWidth = (int)(110 * _zoom);
-        var titleFont = new Font(TitleFont.FontFamily, TitleFont.Size * _zoom);
+        var padding = (int)((compactIcons ? 2 : 6) * _zoom);
+        var iconWidth = (int)((compactIcons ? 16 : 60) * _zoom);
+        var iconHeight = (int)((compactIcons ? 16 : 42) * _zoom);
+        var titleFont = new Font(TitleFont.FontFamily, (compactIcons ? 8 : TitleFont.Size) * _zoom);
         var titleSize = TextRenderer.MeasureText(
             displayName, titleFont,
-            new Size(labelWidth, int.MaxValue), TitleFlags);
-        var panelHeight = (int)(6 * _zoom) + (int)(42 * _zoom) + titleSize.Height + (int)(6 * _zoom);
+            new Size(compactIcons ? int.MaxValue : (int)(110 * _zoom), int.MaxValue),
+            compactIcons ? CompactTitleFlags : TitleFlags);
+        var labelWidth = compactIcons ? titleSize.Width : (int)(110 * _zoom);
+        var panelWidth = compactIcons ? padding + iconWidth + padding + labelWidth + padding : labelWidth;
+        var panelHeight = compactIcons
+            ? Math.Max(1, (int)(GridSize * _zoom))
+            : padding + iconHeight + titleSize.Height + padding;
 
-        panel.Size = new Size(labelWidth, panelHeight);
+        panel.Size = new Size(panelWidth, panelHeight);
         panel.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
 
-        icon.Size = new Size((int)(60 * _zoom), (int)(42 * _zoom));
-        icon.Location = new Point((labelWidth - icon.Width) / 2, (int)(6 * _zoom));
+        icon.Size = new Size(iconWidth, iconHeight);
+        icon.Location = new Point(
+            compactIcons ? padding : (labelWidth - icon.Width) / 2,
+            compactIcons ? (panelHeight - icon.Height) / 2 : padding);
 
         var original = icon.Tag as Image ?? icon.Image;
         if (original is not null)
@@ -191,8 +201,9 @@ public partial class Form1
             if (old is not null && old != original) old.Dispose();
         }
 
-        title.Size = new Size(labelWidth, titleSize.Height);
-        title.Location = new Point(0, (int)(48 * _zoom));
+        title.Size = new Size(labelWidth, compactIcons ? panelHeight - 2 * padding : titleSize.Height);
+        title.Location = new Point(compactIcons ? padding + iconWidth + padding : 0,
+            compactIcons ? padding : padding + iconHeight);
         ReplaceFont(title, titleFont);
     }
 
@@ -293,7 +304,7 @@ public partial class Form1
         };
         title.Paint += (s, e) =>
             TextRenderer.DrawText(e.Graphics, (string)title.Tag!, title.Font,
-                title.ClientRectangle, title.ForeColor, TitleFlags);
+                title.ClientRectangle, title.ForeColor, PageFromWorkspace(workspace).CompactIcons ? CompactTitleFlags : TitleFlags);
 
         panel.Controls.Add(icon);
         panel.Controls.Add(title);
@@ -386,14 +397,18 @@ public partial class Form1
                 else
                     SelectSingle(workspace, panel);
             },
-            onDoubleClick: ctrl =>
+            onDoubleClick: (ctrl, e) =>
             {
                 if (dragGroup is not null)
                     foreach (var (_, _, _, g) in dragGroup)
                         DisposeDragGhost(g, workspace);
                 dragGroup = null;
-                if (title.RectangleToScreen(title.ClientRectangle).Contains(Cursor.Position))
-                    return; // title double-click handled by manual detector below
+                var clickPoint = panel.PointToClient(ctrl.PointToScreen(e.Location));
+                if (title.Bounds.Contains(clickPoint) && !PageFromWorkspace(workspace).CompactIcons)
+                {
+                    RenameIcon(item, title, panel);
+                    return;
+                }
                 if (!ItemExists(item.Path))
                 {
                     MessageBox.Show(
@@ -416,39 +431,24 @@ public partial class Form1
             onDragEnd: () =>
             {
                 if (dragGroup is null) return;
+                var compactIcons = PageFromWorkspace(workspace).CompactIcons;
+                var moving = dragGroup.Select(x => x.c).ToHashSet();
+                var placed = new List<Rectangle>();
                 foreach (var (c, i, _, g) in dragGroup)
                 {
-                    c.Location = SnapToGrid(workspace, c.Size, g.Location);
+                    c.Location = compactIcons && i is IconItem
+                        ? SnapCompactIconToList(workspace, c, g.Location, moving, placed)
+                        : SnapToGrid(workspace, c.Size, g.Location);
                     i.X = (int)(c.Left / _zoom);
                     i.Y = (int)(c.Top / _zoom);
                     c.BringToFront();
+                    placed.Add(c.Bounds);
                 }
                 foreach (var (_, _, _, g) in dragGroup)
                     DisposeDragGhost(g, workspace);
                 dragGroup = null;
                 _board.Dirty();
             });
-
-        // Labels don't reliably synthesize WM_LBUTTONDBLCLK, so detect title double-click manually.
-        DateTime lastTitleUp = DateTime.MinValue;
-        Point lastTitleUpPos = Point.Empty;
-        title.MouseUp += (s, e) =>
-        {
-            if (e.Button != MouseButtons.Left) return;
-            var now = DateTime.UtcNow;
-            if ((now - lastTitleUp).TotalMilliseconds <= SystemInformation.DoubleClickTime
-                && Math.Abs(e.X - lastTitleUpPos.X) <= SystemInformation.DoubleClickSize.Width
-                && Math.Abs(e.Y - lastTitleUpPos.Y) <= SystemInformation.DoubleClickSize.Height)
-            {
-                lastTitleUp = DateTime.MinValue;
-                RenameIcon(item, title, panel);
-            }
-            else
-            {
-                lastTitleUp = now;
-                lastTitleUpPos = e.Location;
-            }
-        };
 
         workspace.Controls.Add(panel);
         ApplyZoomToControl(panel);
@@ -479,6 +479,9 @@ public partial class Form1
         item.Label = newLabel;
         title.Tag = newLabel;
         ApplyZoomToControl(panel);
+        var workspace = (Panel)panel.Parent!;
+        if (PageFromWorkspace(workspace).CompactIcons)
+            PlaceCompactIconInList(workspace, panel);
         title.Invalidate();
     }
 
@@ -606,7 +609,10 @@ public partial class Form1
             copy.X += dx;
             copy.Y += dy;
             page.Items.Add(copy);
-            CreateView(workspace, copy);
+            if (copy is IconItem icon && page.CompactIcons)
+                PlaceCompactIconInList(workspace, CreateIconView(workspace, icon));
+            else
+                CreateView(workspace, copy);
         }
         _board.Dirty();
     }
@@ -677,7 +683,7 @@ public partial class Form1
                 else
                     SelectSingle(workspace, note);
             },
-            onDoubleClick: _ => EditNote(),
+            onDoubleClick: (_, _) => EditNote(),
             onDragEnd: () =>
             {
                 if (dragGroup is null) return;
@@ -805,6 +811,40 @@ public partial class Form1
         int x = (int)Math.Round((double)p.X / grid) * grid;
         int y = (int)Math.Round((double)p.Y / grid) * grid;
         return Clamp(workspace, size, new Point(x, y));
+    }
+
+    private Point SnapCompactIconToList(Panel workspace, Control item, Point p, HashSet<Control> moving, List<Rectangle> placed)
+    {
+        var grid = (int)(GridSize * _zoom);
+        if (grid == 0) grid = GridSize;
+        int x = (int)Math.Round((double)p.X / grid) * grid;
+        x = Math.Clamp(x, 0, Math.Max(0, workspace.Width - item.Width));
+        int maxRow = Math.Max(0, workspace.Height - item.Height) / grid;
+        int desiredRow = (int)Math.Round((double)p.Y / grid);
+
+        bool IsOccupied(Rectangle bounds) =>
+            placed.Any(bounds.IntersectsWith) ||
+            workspace.Controls.OfType<Control>().Any(c => !moving.Contains(c) && IsSelectable(c) && bounds.IntersectsWith(c.Bounds));
+
+        foreach (var row in Enumerable.Range(0, maxRow + 1).OrderBy(row => Math.Abs(row - desiredRow)))
+        {
+            var bounds = new Rectangle(x, row * grid, item.Width, item.Height);
+            if (IsOccupied(bounds)) continue;
+            Debug.Assert(!IsOccupied(bounds), "Compact list placement must not overlap another item.");
+            return bounds.Location;
+        }
+
+        // shortcut: if no list row is free, leave the item where it was; add scrolling when pages need more rows.
+        return item.Location;
+    }
+
+    private void PlaceCompactIconInList(Panel workspace, Panel item)
+    {
+        var moving = new HashSet<Control> { item };
+        item.Location = SnapCompactIconToList(workspace, item, item.Location, moving, new List<Rectangle>());
+        var icon = (IconItem)item.Tag!;
+        icon.X = (int)(item.Left / _zoom);
+        icon.Y = (int)(item.Top / _zoom);
     }
 
 }

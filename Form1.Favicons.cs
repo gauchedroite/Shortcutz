@@ -48,6 +48,7 @@ public partial class Form1
                         var old = icon.Image;
                         icon.Image = cached;
                         icon.Tag = cached;
+                        if (panel.Controls.Count > 0) ApplyZoomToControl(panel);
                         old?.Dispose();
                     });
                 }
@@ -70,6 +71,7 @@ public partial class Form1
                 var old = icon.Image;
                 icon.Image = bmp;
                 icon.Tag = bmp;
+                if (panel.Controls.Count > 0) ApplyZoomToControl(panel);
                 old?.Dispose();
             });
         }
