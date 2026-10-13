@@ -159,7 +159,8 @@ public partial class Form1
             {
                 var loc = SnapToGrid(workspace, iconSize,
                     new Point(dropPoint.X + i % 3 * (int)(GridSize * _zoom), dropPoint.Y + i / 3 * (int)(GridSize * _zoom)));
-                var item = new IconItem(path, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), null);
+                var label = File.Exists(path) ? Path.GetFileNameWithoutExtension(path) : null;
+                var item = new IconItem(path, (int)(loc.X / _zoom), (int)(loc.Y / _zoom), label);
                 page.Items.Add(item);
                 CreateIconView(workspace, item);
                 i++;
