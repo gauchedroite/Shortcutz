@@ -41,13 +41,17 @@ Built with .NET 10 Windows Forms.
 
 ## State
 
-State is persisted as JSON under:
+State is persisted as JSON by default under:
 
 ```
 %LocalAppData%\Shortcutz\state.json
 ```
 
-A `.bak` backup is kept alongside it. On load failure the backup is used.
+Right-click an empty board and choose **Switch state file...** to load another
+`.json` state file. Changes are saved to the active file, and the last selected
+file is used the next time the app starts. When 7-Zip is
+installed, compressed backups are stored beside each active state file. If a
+state file cannot be loaded, a `.corrupt` copy is saved beside it.
 
 ## Build & run
 

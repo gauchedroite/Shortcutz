@@ -12,8 +12,34 @@ public partial class Form1
 {
     // ---------- persistence ----------
 
+    private void SwitchStateFile()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Switch state file",
+            Filter = "JSON state files (*.json)|*.json|All files (*.*)|*.*",
+            InitialDirectory = Path.GetDirectoryName(_stateFile),
+            FileName = Path.GetFileName(_stateFile)
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var selectedFile = Path.GetFullPath(dialog.FileName);
+        if (string.Equals(selectedFile, Path.GetFullPath(_stateFile), StringComparison.OrdinalIgnoreCase)) return;
+
+        SaveState();
+        _stateFile = selectedFile;
+        try { File.WriteAllText(_lastStateFilePath, _stateFile); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not remember the selected state file.\n\n{ex.Message}",
+                "State file preference failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        ReloadState();
+    }
+
     private void LoadState()
     {
+        Text = $"Shortcutz - {Path.GetFileName(_stateFile)}";
         if (!File.Exists(_stateFile))
         {
             AddTab("Board");
@@ -142,7 +168,7 @@ public partial class Form1
         try
         {
             var name = "state_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".json";
-            var psi = new ProcessStartInfo(_sevenZip, $"a \"{_stateArchive}\" -si\"{name}\"")
+            var psi = new ProcessStartInfo(_sevenZip, $"a \"{_stateFile}.7z\" -si\"{name}\"")
             {
                 RedirectStandardInput = true,
                 UseShellExecute = false,

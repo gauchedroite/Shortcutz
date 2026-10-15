@@ -24,8 +24,8 @@ public partial class Form1 : Form
 
     private const string AppDataDirName = "Shortcutz";
 
-    private readonly string _stateFile;
-    private readonly string _stateArchive;
+    private string _stateFile;
+    private readonly string _lastStateFilePath;
     private static readonly string? _sevenZip = Find7z();
     private readonly ContextMenuStrip _tabMenu;
     private readonly ContextMenuStrip _subTabMenu;
@@ -98,12 +98,29 @@ public partial class Form1 : Form
         };
         _workspaceMenu.Items.Add(showGridItem);
         _workspaceMenu.Items.Add("Paste", null, (s, e) => PasteItems(_lastWorkspaceMenuLocation));
+        _workspaceMenu.Items.Add(new ToolStripSeparator());
+        _workspaceMenu.Items.Add("Switch state file...", null, (s, e) =>
+        {
+            SwitchStateFile();
+            showGridItem.Checked = _showGridDots;
+        });
 
-        _stateFile = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppDataDirName, "state.json");
-        _stateArchive = _stateFile + ".7z";
-        Directory.CreateDirectory(Path.GetDirectoryName(_stateFile)!);
+        var stateDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppDataDirName);
+        Directory.CreateDirectory(stateDirectory);
+        var defaultStateFile = Path.Combine(stateDirectory, "state.json");
+        _lastStateFilePath = Path.Combine(stateDirectory, "_last-state.txt");
+        _stateFile = defaultStateFile;
+        var oldPreferencePath = Path.Combine(stateDirectory, "last-state.txt");
+        try
+        {
+            if (!File.Exists(_lastStateFilePath) && File.Exists(oldPreferencePath))
+                File.Move(oldPreferencePath, _lastStateFilePath);
+            var lastStateFile = File.ReadAllText(_lastStateFilePath).Trim();
+            if (!string.IsNullOrEmpty(lastStateFile) && File.Exists(lastStateFile))
+                _stateFile = Path.GetFullPath(lastStateFile);
+        }
+        catch { }
         tabs.Tag = _board.Tabs;
         
         tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
