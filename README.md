@@ -7,6 +7,7 @@ Built with .NET 10 Windows Forms.
 ## Features
 
 - Boards and pages. Each top-level tab contains one or more pages. Pages can hold board items or plain text.
+- State file switching. Choose another JSON board file from the empty-board context menu.
 - Tabs and pages. Add, rename, delete, and drag them to reorder. Right-click a tab to see its actions.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
