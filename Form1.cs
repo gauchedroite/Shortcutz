@@ -302,7 +302,8 @@ public partial class Form1 : Form
             foreach (TabPage sub in subTabs.TabPages.Cast<TabPage>().ToList())
             {
                 var workspace = WorkspaceFromSubPage(sub);
-                foreach (Control c in workspace.Controls) DisposeItemControl(c);
+                ClearDragGhosts(workspace);
+                foreach (Control c in workspace.Controls.Cast<Control>().ToList()) DisposeItemControl(c);
             }
         }
         tabs.TabPages.Clear();

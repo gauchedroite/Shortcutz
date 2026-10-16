@@ -48,8 +48,7 @@ public partial class Form1
     private static bool IsSelected(Control c) => c switch
     {
         Panel p when p.Tag is IconItem icon => p.BackColor != IconBaseColor(icon),
-        Panel => c.BackColor != Color.Transparent,
-        Label => c.BackColor != NoteBaseColor((NoteItem)c.Tag!),
+        Label note when note.Tag is NoteItem item => note.BackColor != NoteBaseColor(item),
         _ => false
     };
 

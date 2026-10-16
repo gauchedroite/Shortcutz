@@ -27,9 +27,10 @@ public partial class Form1
 
     // Shared drag logic for any draggable control (and its child subcontrols that
     // should all act as one draggable region, e.g. icon panel + icon + title).
-    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action<Control, MouseEventArgs>? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null)
+    private static void WireDrag(Control[] controls, Action<int, int> onDrag, Action onClick, Action<Control, MouseEventArgs>? onDoubleClick = null, Action? onDragStart = null, Action? onDragEnd = null, Action? onDragCancel = null)
     {
         bool dragging = false;
+        bool mouseDown = false;
         bool doubleClick = false;
         Point dragOffset = Point.Empty;
         foreach (var c in controls)
@@ -44,14 +45,23 @@ public partial class Form1
                     return;
                 }
                 doubleClick = false;
+                mouseDown = true;
                 dragging = false;
                 dragOffset = e.Location;
                 controls[0].BringToFront();
                 c.Capture = true;
             };
+            c.MouseCaptureChanged += (s, e) =>
+            {
+                if (c.Capture || !mouseDown) return;
+                mouseDown = false;
+                if (!dragging) return;
+                dragging = false;
+                onDragCancel?.Invoke();
+            };
             c.MouseMove += (s, e) =>
             {
-                if (e.Button != MouseButtons.Left) return;
+                if (e.Button != MouseButtons.Left || !mouseDown) return;
                 if (!dragging && (Math.Abs(e.X - dragOffset.X) > 2 || Math.Abs(e.Y - dragOffset.Y) > 2))
                 {
                     dragging = true;
@@ -62,11 +72,14 @@ public partial class Form1
             c.MouseUp += (s, e) =>
             {
                 if (e.Button != MouseButtons.Left) return;
-                c.Capture = false;
                 if (doubleClick) { doubleClick = false; return; }
-                if (dragging) onDragEnd?.Invoke();
-                else onClick();
+                if (!mouseDown) return;
+                mouseDown = false;
+                var wasDragging = dragging;
                 dragging = false;
+                c.Capture = false;
+                if (wasDragging) onDragEnd?.Invoke();
+                else onClick();
             };
         }
     }
@@ -110,6 +123,12 @@ public partial class Form1
         workspace.Controls.Remove(ghost);
         if (ghost.Image is not null) { ghost.Image.Dispose(); ghost.Image = null; }
         ghost.Dispose();
+    }
+
+    private static void ClearDragGhosts(Panel workspace)
+    {
+        foreach (var ghost in workspace.Controls.OfType<Label>().Where(l => l.Tag as string == "ghost").ToList())
+            DisposeDragGhost(ghost, workspace);
     }
 
     private float NextZoom(int direction)
@@ -368,6 +387,7 @@ public partial class Form1
                 // Create ghosts for all selected items and send originals behind them
                 dragGroup = workspace.Controls.OfType<Control>()
                     .Where(IsSelected)
+                    .ToList()
                     .Select(c =>
                     {
                         var g = CreateDragGhost(c);
@@ -447,6 +467,11 @@ public partial class Form1
                     DisposeDragGhost(g, workspace);
                 dragGroup = null;
                 _board.Dirty();
+            },
+            onDragCancel: () =>
+            {
+                ClearDragGhosts(workspace);
+                dragGroup = null;
             });
 
         workspace.Controls.Add(panel);
@@ -656,6 +681,7 @@ public partial class Form1
                     SelectSingle(workspace, note);
                 dragGroup = workspace.Controls.OfType<Control>()
                     .Where(IsSelected)
+                    .ToList()
                     .Select(c =>
                     {
                         var g = CreateDragGhost(c);
@@ -700,6 +726,11 @@ public partial class Form1
                     DisposeDragGhost(g, workspace);
                 dragGroup = null;
                 _board.Dirty();
+            },
+            onDragCancel: () =>
+            {
+                ClearDragGhosts(workspace);
+                dragGroup = null;
             });
 
         var menu = new ContextMenuStrip();
