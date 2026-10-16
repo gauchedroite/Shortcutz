@@ -207,14 +207,10 @@ public partial class Form1
 
     private static string? FindReadme()
     {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null)
-        {
-            var p = Path.Combine(dir, "README.md");
-            if (File.Exists(p)) return p;
-            dir = Directory.GetParent(dir)?.FullName;
-        }
-        return null;
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            AppDataDirName, "README.md");
+        return File.Exists(path) ? path : null;
     }
 
     private static string? FindChrome()

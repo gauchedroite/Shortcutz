@@ -1,68 +1,70 @@
-﻿# Shortcutz
+# Shortcutz
 
-A lightweight Windows desktop tool for organizing shortcuts, files, and notes
-on a grid of tabbed boards. Stays on top of all windows so your shortcuts are
-always one click away.
+Shortcutz is a Windows desktop app for shortcuts, files, notes, and Outlook messages. It keeps its window above other apps.
 
 Built with .NET 10 Windows Forms.
 
 ## Features
 
-- **Tabbed boards** — organize shortcuts across multiple tabs. Rename, delete,
-  and drag-reorder tabs. Right-click a tab for its context menu.
-- **Drag-and-drop anything** — drop files, folders, URLs onto a board. URLs fetch their page title and favicon
-  automatically.
-- **Desktop-style multi-select** — rubber-band select, group-drag, and delete
-  multiple items at once.
-- **Notes** — drop text notes on a board. Resize the note width with the grip,
-  double-click to edit, Shift+Enter for line breaks.
-- **Zoom** — Ctrl + `+` / `-` to zoom in/out, Ctrl + `0` to reset. Per-tab zoom
-  is persisted.
-- **Compact icons** — select one or more icons and press Ctrl + `M` to toggle their compact layout.
-- **Open in Notepad++** — Shift+double-click a file item to open it in
-  Notepad++ regardless of its extension.
-- **Always on top** — the window stays above other apps.
-- **Grid dots** — optional visual alignment grid (right-click workspace).
+- Boards and pages. Each top-level tab contains one or more pages. Pages can hold board items or plain text.
+- Tabs and pages. Add, rename, delete, and drag them to reorder. Right-click a tab to see its actions.
+- Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
+- Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
+- Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
+- Text pages. Add a text page from the page-tab menu.
+- Multi-select. Drag on an empty part of a board to select items. Move, copy, cut, or delete selected items together.
+- Search. Search tab names, page names, notes, text pages, item labels, and file paths.
+- Zoom. Each page keeps its own zoom level.
+- Compact icons. Select icons and press `Ctrl+M` to change their layout.
+- Notepad++. Hold `Shift` and double-click a file item to open it in Notepad++.
+- Grid dots. Right-click an empty part of a board to show or hide the grid.
 
 ## Shortcuts
 
 | Action | Shortcut |
 |---|---|
-| Rename selected item / tab | Double-click, or `F2` |
-| Delete selected items | `Delete` |
-| Search all content | `Ctrl+F` |
-| Toggle compact layout for selected icons | `Ctrl+M` |
-| Reload state from disk | `Ctrl+R` |
-| Zoom in / out | `Ctrl` + `+` / `Ctrl` + `-` |
+| Save state | `Ctrl+S` |
+| Search | `Ctrl+F` |
+| Move through search results | `Up` / `Down` |
+| Go to the selected result or close search | `Enter` / `Escape` |
+| Rename a selected item | `F2` |
+| Rename a tab or page | Double-click its tab |
+| Add a note | Double-click an empty part of a board |
+| Edit a note | Double-click the note |
+| Copy, cut, or paste selected items | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` |
+| Remove selected items from the board | `Delete` |
+| Toggle compact layout | `Ctrl+M` |
+| Zoom in or out | `Ctrl` + `+` / `Ctrl` + `-` |
 | Reset zoom | `Ctrl` + `0` |
-| Open file in Notepad++ | Shift + double-click |
-| Edit note | Double-click |
-| New tab right of selected | Right-click tab → *Add tab* |
+| Move through tab and page history | `Ctrl` + `Left` / `Ctrl` + `Right` |
+| Reload state from disk | `Ctrl+R` |
+| Open a file in Notepad++ | `Shift` + double-click |
+| Open this README | `F1` |
 
 ## State
 
-State is persisted as JSON by default under:
+Shortcutz stores board data in a JSON file. The default file is:
 
-```
+```text
 %LocalAppData%\Shortcutz\state.json
 ```
 
-Right-click an empty board and choose **Switch state file...** to load another
-`.json` state file. Changes are saved to the active file, and the last selected
-file is used the next time the app starts. When 7-Zip is
-installed, compressed backups are stored beside each active state file. If a
-state file cannot be loaded, a `.corrupt` copy is saved beside it.
+Shortcutz saves state when you press `Ctrl+S`, close the app, or switch state files. Right-click an empty board and choose **Switch state file...** to use another JSON file. Shortcutz saves the current state before it switches files.
 
-## Build & run
+The state stores paths to files and folders. Shortcutz does not copy those items, except for dropped `.msg` files. It saves those files in `%LocalAppData%\Shortcutz\outlook` and stores their paths in the state. Removing a board item does not delete its source file or its saved `.msg` file.
 
-Requires the .NET 10 SDK and Windows.
+Shortcutz uses the last selected state file when it starts. If 7-Zip is installed, it stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
+
+## Build and run
+
+Requires the .NET 10 SDK and Windows. Each build copies `README.md` to `%LocalAppData%\Shortcutz\README.md`. Press `F1` in the app to open that copy.
 
 ```bash
 dotnet build
 cmd //c "start bin/Debug/net10.0-windows/Shortcutz.exe"
 ```
 
-Rebuild and restart (kills any running instance first):
+To rebuild and restart, stop the running app first:
 
 ```bash
 cmd //c "taskkill /F /IM Shortcutz.exe >nul 2>&1"
@@ -70,7 +72,7 @@ dotnet build
 cmd //c "start bin/Debug/net10.0-windows/Shortcutz.exe"
 ```
 
-Quick restart only (no build):
+To restart without a build:
 
 ```bash
 cmd //c "taskkill /F /IM Shortcutz.exe >nul 2>&1 & start bin/Debug/net10.0-windows/Shortcutz.exe"

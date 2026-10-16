@@ -14,4 +14,10 @@
     <EmbeddedResource Include="app.ico" />
   </ItemGroup>
 
+  <Target Name="CopyReadmeToStateFolder" AfterTargets="Build">
+    <MakeDir Directories="$(LOCALAPPDATA)\Shortcutz" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\README.md"
+          DestinationFiles="$(LOCALAPPDATA)\Shortcutz\README.md" />
+  </Target>
+
 </Project>
