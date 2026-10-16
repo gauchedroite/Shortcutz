@@ -61,6 +61,7 @@ public partial class Form1 : Form
         Controls.Add(tabs);
         InitSearch();
         ClientSize = new Size(1000, 650);
+        MinimumSize = new Size(400, 300);
         Text = "Shortcutz";
         try
         {

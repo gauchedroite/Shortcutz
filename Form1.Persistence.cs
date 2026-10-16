@@ -153,7 +153,8 @@ public partial class Form1
             var subTabs = SubTabsFromPage(tabs.TabPages[i]);
             _board.Tabs[i].SelectedPageIndex = subTabs.SelectedIndex;
         }
-        var window = new WindowState(Location.X, Location.Y, Size.Width, Size.Height);
+        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        var window = new WindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height);
         var options = new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
         var json = JsonSerializer.Serialize(_board.ToState(window), options);
         File.WriteAllText(_stateFile, json);
