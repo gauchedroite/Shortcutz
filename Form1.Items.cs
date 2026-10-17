@@ -247,8 +247,9 @@ public partial class Form1
     private static void ReplaceFont(Control c, Font font)
     {
         var old = c.Font;
-        if (old != TitleFont) old.Dispose();
+        if (old.Equals(font)) { font.Dispose(); return; }
         c.Font = font;
+        if (!ReferenceEquals(old, TitleFont)) old.Dispose();
     }
 
     private static Bitmap ScaleBitmap(Image source, Size fit)

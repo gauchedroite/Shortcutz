@@ -1,3 +1,7 @@
+# Bug-fix verification
+
+Do not claim a bug is fixed based only on code inspection, a successful build, or the app starting. Verify the original failure path after the change. If it cannot be reproduced or exercised, state exactly what remains unverified and do not claim the fix is confirmed. Report build, startup, and failure-path results separately.
+
 # Development
 
 Instructions for building and running the project:
