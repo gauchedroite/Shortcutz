@@ -98,11 +98,16 @@ public partial class Form1 : Form
             _board.Dirty();
         };
         _subTabMenu.Items.Add(monospaceItem);
+        var previewItem = new ToolStripMenuItem("Markdown preview") { CheckOnClick = true };
+        previewItem.Click += (s, e) => ToggleMarkdownPreview();
+        _subTabMenu.Items.Add(previewItem);
         _subTabMenu.Opening += (s, e) =>
         {
             var page = SelectedSubPage is TabPage subPage ? PageFromSubPage(subPage) : null;
-            monospaceItem.Enabled = page?.Type == "Text";
+            monospaceItem.Enabled = page?.Type == "Text" && page.MarkdownPreview == false;
+            previewItem.Enabled = page?.Type == "Text";
             monospaceItem.Checked = page?.Monospace == true;
+            previewItem.Checked = page?.MarkdownPreview == true;
         };
         _subTabMenu.Items.Add("Rename", null, RenameSubTab);
         _subTabMenu.Items.Add("Delete", null, CloseSubTab);
@@ -193,6 +198,13 @@ public partial class Form1 : Form
             e.Handled = true;
             e.SuppressKeyPress = true;
             ToggleSearch();
+            return;
+        }
+        if (e.KeyCode == Keys.F5 && SelectedSubPage is TabPage textSubPage && PageFromSubPage(textSubPage).Type == "Text")
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            ToggleMarkdownPreview();
             return;
         }
         if (e.Control && e.KeyCode == Keys.M)
@@ -423,7 +435,7 @@ public partial class Form1 : Form
         var page = AddPage(name, index);
         page.Type = "Text";
         if (SelectedWorkspace() is Panel workspace)
-            CreateTextBox(workspace, page);
+            UpdateTextPageView(workspace, page);
         return page;
     }
 
@@ -473,10 +485,68 @@ public partial class Form1 : Form
         var page = PageFromSubPage(subPage);
         var workspace = WorkspaceFromSubPage(subPage);
         if (page.Type == "Text")
-            CreateTextBox(workspace, page);
+            UpdateTextPageView(workspace, page);
         else
             foreach (var item in page.Items)
                 CreateView(workspace, item);
+    }
+
+    private void ToggleMarkdownPreview()
+    {
+        if (SelectedSubPage is not TabPage subPage) return;
+        var page = PageFromSubPage(subPage);
+        if (page.Type != "Text") return;
+        page.MarkdownPreview = !page.MarkdownPreview;
+        UpdateTextPageView(WorkspaceFromSubPage(subPage), page);
+        _board.Dirty();
+    }
+
+    private void UpdateTextPageView(Panel workspace, Page page)
+    {
+        var editor = workspace.Controls.OfType<TextBox>().FirstOrDefault();
+        if (editor is not null)
+        {
+            page.TextSelectionStart = editor.SelectionStart;
+            page.TextSelectionLength = editor.SelectionLength;
+        }
+        bool restoreEditor = !page.MarkdownPreview && workspace.Controls.OfType<Panel>()
+            .Any(panel => panel.Controls.OfType<MarkdownTextView>().Any());
+        foreach (Control control in workspace.Controls.Cast<Control>().ToList())
+        {
+            workspace.Controls.Remove(control);
+            control.Dispose();
+        }
+        if (page.MarkdownPreview)
+        {
+            var preview = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = SystemColors.Window };
+            var markdown = new MarkdownTextView
+            {
+                Location = new Point(12, 12),
+                Font = TitleFont,
+                ForeColor = SystemColors.WindowText,
+                Markdown = page.Text
+            };
+            preview.Controls.Add(markdown);
+            preview.Resize += (s, e) => ResizeMarkdownPreview(preview, markdown);
+            workspace.Controls.Add(preview);
+            ResizeMarkdownPreview(preview, markdown);
+        }
+        else
+        {
+            var box = CreateTextBox(workspace, page);
+            if (restoreEditor)
+            {
+                box.SelectionStart = Math.Clamp(page.TextSelectionStart, 0, box.TextLength);
+                box.SelectionLength = Math.Clamp(page.TextSelectionLength, 0, box.TextLength - box.SelectionStart);
+                box.Focus();
+            }
+        }
+    }
+
+    private static void ResizeMarkdownPreview(Panel preview, MarkdownTextView markdown)
+    {
+        int width = Math.Max(1, preview.ClientSize.Width - 24);
+        markdown.Size = new Size(width, markdown.ContentHeight(width));
     }
 
     private TextBox CreateTextBox(Panel workspace, Page page)

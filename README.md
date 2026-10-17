@@ -12,7 +12,8 @@ Built with .NET 10 Windows Forms.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
 - Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
-- Text pages. Add a text page from the page-tab menu. Right-click its tab to switch between regular and monospace fonts.
+- Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [HOWTO-MD.md](HOWTO-MD.md) for supported syntax and limits.
+- Notes render Markdown; double-click to edit the source. Icon labels support bold with `**text**`.
 - Multi-select. Drag on an empty part of a board to select items. Move, copy, cut, or delete selected items together.
 - Search. Search tab names, page names, notes, text pages, item labels, and file paths.
 - Zoom. Each page keeps its own zoom level.
@@ -39,6 +40,7 @@ Built with .NET 10 Windows Forms.
 | Reset zoom | `Ctrl` + `0` |
 | Move through tab and page history | `Ctrl` + `Left` / `Ctrl` + `Right` |
 | Reload state from disk | `Ctrl+R` |
+| Toggle Markdown preview on a text page | `F5` |
 | Open a file in Notepad++ | `Shift` + double-click |
 | Open this README | `F1` |
 

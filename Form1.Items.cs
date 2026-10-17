@@ -195,7 +195,7 @@ public partial class Form1
         var iconHeight = (int)((compactIcons ? 16 : 42) * _zoom);
         var titleFont = new Font(TitleFont.FontFamily, (compactIcons ? 8 : TitleFont.Size) * _zoom);
         var titleSize = TextRenderer.MeasureText(
-            displayName, titleFont,
+            MarkdownTextView.StripBold(displayName), titleFont,
             new Size(compactIcons ? int.MaxValue : (int)(110 * _zoom), int.MaxValue),
             compactIcons ? CompactTitleFlags : TitleFlags);
         var labelWidth = compactIcons ? titleSize.Width : (int)(110 * _zoom);
@@ -229,16 +229,18 @@ public partial class Form1
     private void ScaleNoteView(Label note, NoteItem item)
     {
         note.Padding = new Padding((int)(6 * _zoom));
-        ReplaceFont(note, new Font(TitleFont.FontFamily, TitleFont.Size * _zoom));
         int w = (int)(item.Width * _zoom);
         note.Width = w;
         // The selection border eats 1px per side; measure inside it so the
         // last wrapped line isn't clipped.
         const int border = 2;
-        var tsize = TextRenderer.MeasureText(note.Text, note.Font,
-            new Size(w - note.Padding.Horizontal - border, int.MaxValue),
-            TextFormatFlags.WordBreak);
-        note.Height = tsize.Height + note.Padding.Vertical + border;
+        var markdown = note.Controls.OfType<MarkdownTextView>().First();
+        markdown.Location = new Point(note.Padding.Left, note.Padding.Top);
+        markdown.Width = Math.Max(1, w - note.Padding.Horizontal - border);
+        ReplaceFont(markdown, new Font(TitleFont.FontFamily, TitleFont.Size * _zoom));
+        int contentHeight = markdown.ContentHeight(markdown.Width);
+        note.Height = Math.Max((int)(40 * _zoom), contentHeight + note.Padding.Vertical + border);
+        markdown.Height = contentHeight;
         note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
     }
 
@@ -273,7 +275,7 @@ public partial class Form1
 
         const int labelWidth = 110;
         var titleSize = TextRenderer.MeasureText(
-            displayName, TitleFont,
+            MarkdownTextView.StripBold(displayName), TitleFont,
             new Size(labelWidth, int.MaxValue),
             TitleFlags);
         var panelHeight = 6 + 42 + titleSize.Height + 6;
@@ -322,8 +324,8 @@ public partial class Form1
             Tag = displayName
         };
         title.Paint += (s, e) =>
-            TextRenderer.DrawText(e.Graphics, (string)title.Tag!, title.Font,
-                title.ClientRectangle, title.ForeColor, item.Compact ? CompactTitleFlags : TitleFlags);
+            MarkdownTextView.DrawBoldLabel(e.Graphics, (string)title.Tag!, title.Font,
+                title.ClientRectangle, item.Compact);
 
         panel.Controls.Add(icon);
         panel.Controls.Add(title);
@@ -522,7 +524,7 @@ public partial class Form1
         var newText = Prompt("Edit note", "Edit note:", item.Text, multiline: true);
         if (string.IsNullOrWhiteSpace(newText)) return;
         item.Text = newText;
-        note.Text = newText;
+        note.Controls.OfType<MarkdownTextView>().First().Markdown = newText;
         ScaleNoteView(note, item);
         _board.Dirty();
     }
@@ -656,13 +658,22 @@ public partial class Form1
             Location = new Point(item.X, item.Y),
             BackColor = NoteBaseColor(item),
             ForeColor = SystemColors.WindowText,
-            Text = item.Text,
+            Text = "",
             Font = TitleFont,
             Cursor = Cursors.Hand,
             BorderStyle = BorderStyle.None,
             Padding = new Padding(6),
             Tag = item
         };
+        var markdown = new MarkdownTextView
+        {
+            Location = new Point(6, 6),
+            Size = new Size(Math.Max(1, item.Width - 14), 28),
+            Font = TitleFont,
+            ForeColor = SystemColors.WindowText,
+            Markdown = item.Text
+        };
+        note.Controls.Add(markdown);
         note.Paint += (_, e) =>
         {
             if (IsSelected(note))
@@ -682,7 +693,7 @@ public partial class Form1
         }
 
         List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
-        WireDrag(new[] { note },
+        WireDrag(new Control[] { note, markdown },
             onDragStart: () =>
             {
                 if (!IsSelected(note))
@@ -770,6 +781,7 @@ public partial class Form1
             _board.Dirty();
         });
         note.ContextMenuStrip = menu;
+        markdown.ContextMenuStrip = menu;
 
         // Resize grip: child control in the bottom-right corner, fully separate
         // from the note's drag/select wiring (child consumes its own mouse events).
