@@ -66,6 +66,7 @@ public partial class Form1
         else if (c is Label note)
         {
             note.BackColor = selected ? NoteSelectionBackColor : NoteBaseColor((NoteItem)note.Tag!);
+            note.Invalidate(true);
         }
     }
 

@@ -232,7 +232,7 @@ public partial class Form1
         ReplaceFont(note, new Font(TitleFont.FontFamily, TitleFont.Size * _zoom));
         int w = (int)(item.Width * _zoom);
         note.Width = w;
-        // BorderStyle.FixedSingle eats 1px per side; measure inside it so the
+        // The selection border eats 1px per side; measure inside it so the
         // last wrapped line isn't clipped.
         const int border = 2;
         var tsize = TextRenderer.MeasureText(note.Text, note.Font,
@@ -659,9 +659,17 @@ public partial class Form1
             Text = item.Text,
             Font = TitleFont,
             Cursor = Cursors.Hand,
-            BorderStyle = BorderStyle.FixedSingle,
+            BorderStyle = BorderStyle.None,
             Padding = new Padding(6),
             Tag = item
+        };
+        note.Paint += (_, e) =>
+        {
+            if (IsSelected(note))
+            {
+                using var pen = new Pen(Color.Black);
+                e.Graphics.DrawRectangle(pen, 0, 0, note.Width - 1, note.Height - 1);
+            }
         };
 
         void EditNote() => RenameNote(item, note);
@@ -776,6 +784,7 @@ public partial class Form1
         };
         grip.Paint += (s, e) =>
         {
+            if (!IsSelected(note)) return;
             var g = e.Graphics;
             using var pen = new Pen(Color.FromArgb(120, 80, 80, 80), 1f);
             var r = grip.ClientRectangle;

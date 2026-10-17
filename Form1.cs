@@ -11,6 +11,7 @@ namespace Shortcutz;
 public partial class Form1 : Form
 {
     private static readonly Font TitleFont = new("Segoe UI", 10);
+    private static readonly Font MonospaceFont = new(FontFamily.GenericMonospace, TitleFont.Size);
     private const int GridSize = 20;
     // EditControl: break on hyphens and hard-break words longer than the line.
     // Label paints with its own flags (WordBreak only), so titles are drawn by hand below.
@@ -86,6 +87,23 @@ public partial class Form1 : Form
         _subTabMenu = new ContextMenuStrip();
         _subTabMenu.Items.Add("Add page", null, (s, e) => { AddPage("New page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
         _subTabMenu.Items.Add("Add text page", null, (s, e) => { AddTextPage("New text page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
+        var monospaceItem = new ToolStripMenuItem("Monospace font") { CheckOnClick = true };
+        monospaceItem.Click += (s, e) =>
+        {
+            if (SelectedSubPage is not TabPage subPage) return;
+            var page = PageFromSubPage(subPage);
+            page.Monospace = monospaceItem.Checked;
+            if (WorkspaceFromSubPage(subPage).Controls.OfType<TextBox>().FirstOrDefault() is TextBox box)
+                box.Font = page.Monospace ? MonospaceFont : TitleFont;
+            _board.Dirty();
+        };
+        _subTabMenu.Items.Add(monospaceItem);
+        _subTabMenu.Opening += (s, e) =>
+        {
+            var page = SelectedSubPage is TabPage subPage ? PageFromSubPage(subPage) : null;
+            monospaceItem.Enabled = page?.Type == "Text";
+            monospaceItem.Checked = page?.Monospace == true;
+        };
         _subTabMenu.Items.Add("Rename", null, RenameSubTab);
         _subTabMenu.Items.Add("Delete", null, CloseSubTab);
 
@@ -470,7 +488,7 @@ public partial class Form1 : Form
             AcceptsReturn = true,
             WordWrap = true,
             ScrollBars = ScrollBars.Vertical,
-            Font = TitleFont,
+            Font = page.Monospace ? MonospaceFont : TitleFont,
             Text = page.Text
         };
         box.TextChanged += (s, e) => page.Text = box.Text;

@@ -2,7 +2,7 @@ namespace Shortcutz;
 
 // Serialization DTOs
 public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null, bool? Compact = null);
-public sealed record PageState(string Name, List<ItemState>? Items = null, float? Zoom = 1.0f, string? Type = "Board", string? Text = null, bool? CompactIcons = null);
+public sealed record PageState(string Name, List<ItemState>? Items = null, float? Zoom = 1.0f, string? Type = "Board", string? Text = null, bool? CompactIcons = null, bool? Monospace = false);
 public sealed record TabState(string Name, List<PageState>? Pages = null,
     int? SelectedPageIndex = 0,
     [property: System.Text.Json.Serialization.JsonPropertyName("Items")]
@@ -45,9 +45,10 @@ public sealed class Page(string name)
     public string Name = name;
     public string Type = "Board";
     public string Text = "";
+    public bool Monospace;
     public List<Item> Items = new();
     public float Zoom = 1.0f;
-    public PageState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom, Type, string.IsNullOrWhiteSpace(Text) ? null : Text);
+    public PageState ToState() => new(Name, Items.ConvertAll(i => i.ToState()), Zoom, Type, string.IsNullOrWhiteSpace(Text) ? null : Text, Monospace: Monospace);
 }
 
 public sealed class Tab(string name)

@@ -12,7 +12,7 @@ Built with .NET 10 Windows Forms.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
 - Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
-- Text pages. Add a text page from the page-tab menu.
+- Text pages. Add a text page from the page-tab menu. Right-click its tab to switch between regular and monospace fonts.
 - Multi-select. Drag on an empty part of a board to select items. Move, copy, cut, or delete selected items together.
 - Search. Search tab names, page names, notes, text pages, item labels, and file paths.
 - Zoom. Each page keeps its own zoom level.

@@ -63,7 +63,7 @@ public partial class Form1
                         foreach (var p in t.Pages)
                         {
                             var legacyCompactIcons = p.CompactIcons ?? state.CompactIcons ?? false;
-                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "" };
+                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "", Monospace = p.Monospace ?? false };
                             foreach (var it in p.Items ?? new List<ItemState>())
                             {
                                 Item item = it.IsNote
