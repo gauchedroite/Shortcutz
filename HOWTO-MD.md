@@ -19,9 +19,9 @@ Notes always show formatted text. Double-click a note to edit its Markdown sourc
 | Italic | `*italic*` or `_italic_` |
 | Inline code | `` `code` `` |
 | Strikethrough | `~~text~~` |
-| Link | `[label](https://example.com)` |
+| Link | `[label](https://example.com)` or `[file](file:///~/Documents/file.txt)` |
 
-Shortcutz opens absolute `http`, `https`, and `mailto` links when you click them. Other link types are not opened.
+Clicking an absolute link URI passes it to Windows to open with its registered handler. In `file:` links, `~/` expands to the current user's profile folder. Relative links are not opened.
 
 Icon labels support only `**bold**`. Other Markdown marks appear as typed.
 

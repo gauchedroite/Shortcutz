@@ -20,6 +20,8 @@ internal sealed class MarkdownTextView : Control
         Debug.Assert(ParseInline("**bold**").Single() is { Text: "bold", Style: FontStyle.Bold });
         Debug.Assert(ParseBlocks("# Heading").Single() is { Kind: BlockKind.Heading, Level: 1, Text: "Heading" });
         Debug.Assert(ParseBlocks("- Parent\n  - Child").Select(block => block.Nesting).SequenceEqual(new[] { 0, 1 }));
+        Debug.Assert(ExpandHomeFileUri(new Uri("file:///~/.pi/agent/prompts/dominus.md")).LocalPath ==
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pi", "agent", "prompts", "dominus.md"));
     }
 
     private enum BlockKind { Paragraph, Heading, Unordered, Ordered, Quote, Code, Blank, Rule }
@@ -78,10 +80,18 @@ internal sealed class MarkdownTextView : Control
         base.OnMouseClick(e);
         if (e.Button != MouseButtons.Left) return;
         var hit = _linkHits.FirstOrDefault(link => link.Bounds.Contains(e.Location));
-        if (hit is null || !Uri.TryCreate(hit.Url, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https" or "mailto")) return;
+        if (hit is null || !Uri.TryCreate(hit.Url, UriKind.Absolute, out var uri)) return;
+        uri = ExpandHomeFileUri(uri);
         try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
         catch { }
+    }
+
+    private static Uri ExpandHomeFileUri(Uri uri)
+    {
+        if (!uri.IsFile || !uri.AbsolutePath.StartsWith("/~", StringComparison.Ordinal) ||
+            (uri.AbsolutePath.Length > 2 && uri.AbsolutePath[2] != '/')) return uri;
+        var path = Uri.UnescapeDataString(uri.AbsolutePath[2..]).TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        return new Uri(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path));
     }
 
     private LayoutData CreateLayout(int width)
