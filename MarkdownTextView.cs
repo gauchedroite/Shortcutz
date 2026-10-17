@@ -10,7 +10,7 @@ internal sealed class MarkdownTextView : Control
     private static readonly Regex InlinePattern = new(@"\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_|~~[^~]+~~|\[[^\]]+\]\([^)]+\)", RegexOptions.Compiled);
     private static readonly Regex Words = new(@"\s+|\S+", RegexOptions.Compiled);
     private static readonly Regex Heading = new(@"^(#{1,6})\s+(.+?)\s*#*$", RegexOptions.Compiled);
-    private static readonly Regex Unordered = new(@"^\s*[-+*]\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex Unordered = new(@"^(\s*)[-+*]\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex Ordered = new(@"^\s*(\d+)[.)]\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex Quote = new(@"^\s*>\s?(.*)$", RegexOptions.Compiled);
     private string _markdown = "";
@@ -19,10 +19,11 @@ internal sealed class MarkdownTextView : Control
     {
         Debug.Assert(ParseInline("**bold**").Single() is { Text: "bold", Style: FontStyle.Bold });
         Debug.Assert(ParseBlocks("# Heading").Single() is { Kind: BlockKind.Heading, Level: 1, Text: "Heading" });
+        Debug.Assert(ParseBlocks("- Parent\n  - Child").Select(block => block.Nesting).SequenceEqual(new[] { 0, 1 }));
     }
 
     private enum BlockKind { Paragraph, Heading, Unordered, Ordered, Quote, Code, Blank, Rule }
-    private sealed record Block(BlockKind Kind, string Text = "", int Level = 0, string Prefix = "");
+    private sealed record Block(BlockKind Kind, string Text = "", int Level = 0, string Prefix = "", int Nesting = 0);
     private sealed record Run(string Text, FontStyle Style = FontStyle.Regular, bool Code = false, string? Link = null);
     private sealed record Fragment(string Text, Font Font, Color Color, Rectangle Bounds, string? Link);
     private sealed record LinkHit(Rectangle Bounds, string Url);
@@ -117,7 +118,7 @@ internal sealed class MarkdownTextView : Control
                 case BlockKind.Unordered:
                 case BlockKind.Ordered:
                     runs.Add(new Run(block.Prefix, FontStyle.Regular));
-                    indent = 16;
+                    indent = 16 + block.Nesting * 20;
                     break;
                 case BlockKind.Quote:
                     runs.Add(new Run("│ ", FontStyle.Italic));
@@ -165,7 +166,7 @@ internal sealed class MarkdownTextView : Control
         return new LayoutData(fragments, links, fonts, Math.Max(Font.Height, y));
     }
 
-    // shortcut: basic Markdown only; replace with a full parser when tables, nesting, or raw HTML are needed.
+    // shortcut: one level of bullet nesting only; use a full parser for nested ordered lists, deeper nesting, tables, or raw HTML.
     private static List<Block> ParseBlocks(string markdown)
     {
         var blocks = new List<Block>();
@@ -209,7 +210,7 @@ internal sealed class MarkdownTextView : Control
             {
                 FlushParagraph();
                 if (heading.Success) blocks.Add(new Block(BlockKind.Heading, heading.Groups[2].Value, heading.Groups[1].Length));
-                else if (unordered.Success) blocks.Add(new Block(BlockKind.Unordered, unordered.Groups[1].Value, Prefix: "• "));
+                else if (unordered.Success) blocks.Add(new Block(BlockKind.Unordered, unordered.Groups[2].Value, Prefix: "• ", Nesting: unordered.Groups[1].Length > 0 ? 1 : 0));
                 else if (ordered.Success) blocks.Add(new Block(BlockKind.Ordered, ordered.Groups[2].Value, Prefix: ordered.Groups[1].Value + ". "));
                 else if (quote.Success) blocks.Add(new Block(BlockKind.Quote, quote.Groups[1].Value));
                 else blocks.Add(new Block(BlockKind.Rule));

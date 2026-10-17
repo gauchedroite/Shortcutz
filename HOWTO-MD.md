@@ -10,6 +10,7 @@ Notes always show formatted text. Double-click a note to edit its Markdown sourc
 |---|---|
 | Heading | `## Heading` |
 | Bullet list | `- Item` |
+| Nested bullet | Indent a child `- Item` by two spaces |
 | Numbered list | `1. Item` |
 | Quote | `> Quoted text` |
 | Code block | Three backticks on lines before and after the code |
@@ -26,4 +27,4 @@ Icon labels support only `**bold**`. Other Markdown marks appear as typed.
 
 ## Limits
 
-This is not a full CommonMark parser. Nested lists and nested formatting are not supported. Tables and images are not rendered. Raw HTML and Markdown escape sequences are not interpreted. Put a blank line between paragraphs. Line breaks inside a paragraph display as spaces.
+This is not a full CommonMark parser. Nested bullet lists support one level only; nested ordered lists and nested formatting are not supported. Tables and images are not rendered. Raw HTML and Markdown escape sequences are not interpreted. Put a blank line between paragraphs. Line breaks inside a paragraph display as spaces.
