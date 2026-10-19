@@ -240,6 +240,13 @@ public partial class Form1 : Form
             }
             return;
         }
+        if (e.KeyCode == Keys.F1)
+        {
+            e.Handled = true;
+            try { Process.Start(new ProcessStartInfo(FindReadme() ?? "README.md") { UseShellExecute = true }); }
+            catch { }
+            return;
+        }
         if (ActiveControl is TextBox) return;
 
         if (e.Control && e.KeyCode == Keys.Left)
@@ -257,13 +264,6 @@ public partial class Form1 : Form
             return;
         }
 
-        if (e.KeyCode == Keys.F1)
-        {
-            e.Handled = true;
-            try { Process.Start(new ProcessStartInfo(FindReadme() ?? "README.md") { UseShellExecute = true }); }
-            catch { }
-            return;
-        }
         if (e.KeyCode == Keys.R && e.Control)
         {
             e.Handled = true;

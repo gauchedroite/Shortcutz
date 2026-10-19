@@ -12,7 +12,7 @@ Built with .NET 10 Windows Forms.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
 - Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
-- Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [HOWTO-MD.md](HOWTO-MD.md) for supported syntax and limits.
+- Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [Markdown in Shortcutz](#markdown-in-shortcutz) for supported syntax and limits.
 - Notes render Markdown; double-click to edit the source. Icon labels support bold with `**text**`.
 - Multi-select. Drag on an empty part of a board to select items. Move, copy, cut, or delete selected items together.
 - Search. Search tab names, page names, notes, text pages, item labels, and file paths.
@@ -20,6 +20,37 @@ Built with .NET 10 Windows Forms.
 - Compact icons. Select icons and press `Ctrl+M` to change their layout.
 - Notepad++. Hold `Shift` and double-click a file item to open it in Notepad++.
 - Grid dots. Right-click an empty part of a board to show or hide the grid.
+
+## Markdown in Shortcutz
+
+Shortcutz supports a basic set of Markdown formats. Text pages show the source in Edit mode and formatted text in Preview mode. Press `F5` to switch modes. You can also right-click the page tab and select **Markdown preview**. The preview mode is saved with the page.
+
+Notes always show formatted text. Double-click a note to edit its Markdown source. Icon labels support bold text only.
+
+### Supported formats
+
+| Format | Example |
+|---|---|
+| Heading | `## Heading` |
+| Bullet list | `- Item` |
+| Nested bullet | Indent a child `- Item` by two spaces |
+| Numbered list | `1. Item` |
+| Quote | `> Quoted text` |
+| Horizontal rule | `---` |
+| Bold | `**bold**` or `__bold__` |
+| Italic | `*italic*` or `_italic_` |
+| Inline code | `` `code` `` |
+| Code block | Put `` ``` `` on a line before and after the code |
+| Strikethrough | `~~text~~` |
+| Link | `[label](https://example.com)` or `[file](file:///~/Documents/file.txt)` |
+
+Clicking an absolute link URI passes it to Windows to open with its registered handler. In `file:` links, `~/` expands to the current user's profile folder. Relative links are not opened.
+
+Icon labels support only `**bold**`. Other Markdown marks appear as typed.
+
+### Limits
+
+This is not a full CommonMark parser. Nested bullet lists support one level only; nested ordered lists and nested formatting are not supported. Tables and images are not rendered. Raw HTML and Markdown escape sequences are not interpreted. Put a blank line between paragraphs. Line breaks inside a paragraph display as spaces.
 
 ## Shortcuts
 
