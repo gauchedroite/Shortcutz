@@ -70,7 +70,6 @@ public partial class Form1 : Form
             if (stream is not null) Icon = new Icon(stream);
         }
         catch { }
-        TopMost = true; // keep above other apps; PromptForm is also topmost so it stays above this
         ResumeLayout(false);
 
         _tabMenu = new ContextMenuStrip();
@@ -172,6 +171,13 @@ public partial class Form1 : Form
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Control && e.KeyCode == Keys.T)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            TopMost = !TopMost;
+            return;
+        }
         if (e.Control && e.KeyCode == Keys.S)
         {
             e.Handled = true;

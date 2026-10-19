@@ -1,6 +1,6 @@
 # Shortcutz
 
-Shortcutz is a Windows desktop app for shortcuts, files, notes, and Outlook messages. It keeps its window above other apps.
+Shortcutz is a Windows desktop app for shortcuts, files, notes, and Outlook messages. Press `Ctrl+T` to toggle whether its window stays above other apps.
 
 Built with .NET 10 Windows Forms.
 
@@ -57,6 +57,7 @@ This is not a full CommonMark parser. Nested bullet lists support one level only
 | Action | Shortcut |
 |---|---|
 | Save state | `Ctrl+S` |
+| Toggle always on top | `Ctrl+T` |
 | Search | `Ctrl+F` |
 | Move through search results | `Up` / `Down` |
 | Go to the selected result or close search | `Enter` / `Escape` |
