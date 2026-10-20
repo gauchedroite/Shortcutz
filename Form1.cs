@@ -31,10 +31,14 @@ public partial class Form1 : Form
     private readonly ContextMenuStrip _subTabMenu;
     private readonly ContextMenuStrip _workspaceMenu;
     private readonly ToolStrip stateStrip;
-    private readonly Stack<(int Top, int Sub)> _tabHistoryBack = new();
-    private readonly Stack<(int Top, int Sub)> _tabHistoryForward = new();
+    private Stack<(int Top, int Sub)> _tabHistoryBack = new();
+    private Stack<(int Top, int Sub)> _tabHistoryForward = new();
+    private readonly Dictionary<string, (Stack<(int Top, int Sub)> Back, Stack<(int Top, int Sub)> Forward)> _tabHistoryByStateFile = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Stack<string> _stateFileHistoryBack = new();
+    private readonly Stack<string> _stateFileHistoryForward = new();
     private (int Top, int Sub) _currentTabPair = (-1, -1);
     private bool _tabHistoryNavigating;
+    private bool _stateFileHistoryNavigating;
     private bool _tabPairInitialized;
     private readonly TabControl tabs;
     private readonly string _stateDirectory;
@@ -184,6 +188,7 @@ public partial class Form1 : Form
 
     private void Tabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        DiagnosticLog.Write($"TAB-CHANGE {NavigationLogContext()}");
         UpdateWindowTitle();
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
@@ -193,6 +198,7 @@ public partial class Form1 : Form
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
     {
+        DiagnosticLog.Write($"KEY key={e.KeyData} active={ActiveControl?.GetType().Name ?? "none"} {NavigationLogContext()}");
         if (e.Control && e.KeyCode == Keys.T)
         {
             e.Handled = true;
@@ -362,6 +368,7 @@ public partial class Form1 : Form
 
     private void ReloadState()
     {
+        ActiveControl = null;
         foreach (TabPage page in tabs.TabPages.Cast<TabPage>().ToList())
         {
             var subTabs = SubTabsFromPage(page);
@@ -375,13 +382,24 @@ public partial class Form1 : Form
         tabs.TabPages.Clear();
         _board.Tabs.Clear();
         _populatedSubPages.Clear();
-        _tabHistoryBack.Clear();
-        _tabHistoryForward.Clear();
+        _tabHistoryBack = new Stack<(int Top, int Sub)>();
+        _tabHistoryForward = new Stack<(int Top, int Sub)>();
         _currentTabPair = (-1, -1);
         _tabPairInitialized = false;
         LoadState();
         _currentTabPair = GetCurrentTabPair();
         _tabPairInitialized = true;
+    }
+
+    private string NavigationLogContext()
+    {
+        static string Clean(string? value) => (value ?? "").Replace('\r', ' ').Replace('\n', ' ');
+        var tabNames = string.Join(" | ", _board.Tabs.Select(tab =>
+            $"{Clean(tab.Name)}[{string.Join(", ", tab.Pages.Select(page => Clean(page.Name)))}]"));
+        var current = tabs.SelectedTab is TabPage topPage && SelectedSubPage is TabPage subPage
+            ? $"{TabFromPage(topPage).Name}/{PageFromSubPage(subPage).Name}"
+            : "(none)";
+        return $"state={Path.GetFileName(_stateFile)} current={Clean(current)} tabs=[{tabNames}]";
     }
 
     private void NavigateTabPairHistory(bool back)
@@ -395,7 +413,11 @@ public partial class Form1 : Form
             if (IsTabPairValid(candidate) && candidate != current) break;
             source.Pop();
         }
-        if (source.Count == 0) return;
+        if (source.Count == 0)
+        {
+            NavigateStateFileHistory(back);
+            return;
+        }
         var target = source.Pop();
         dest.Push(current);
         _tabHistoryNavigating = true;
@@ -406,6 +428,38 @@ public partial class Form1 : Form
         _tabHistoryNavigating = false;
     }
 
+    private void NavigateStateFileHistory(bool back) =>
+        BeginInvoke(new Action(() => NavigateStateFileHistoryCore(back)));
+
+    private void NavigateStateFileHistoryCore(bool back)
+    {
+        if (_stateFileHistoryNavigating) return;
+        var source = back ? _stateFileHistoryBack : _stateFileHistoryForward;
+        var destination = back ? _stateFileHistoryForward : _stateFileHistoryBack;
+        while (source.Count > 0)
+        {
+            var target = source.Peek();
+            if (!File.Exists(target) || string.Equals(target, _stateFile, StringComparison.OrdinalIgnoreCase))
+            {
+                source.Pop();
+                continue;
+            }
+
+            var current = _stateFile;
+            _stateFileHistoryNavigating = true;
+            try
+            {
+                SwitchToStateFile(target, recordHistory: false);
+                if (string.Equals(_stateFile, current, StringComparison.OrdinalIgnoreCase) || source.Count == 0) return;
+                source.Pop();
+                destination.Push(current);
+                Debug.Assert(string.Equals(destination.Peek(), current, StringComparison.OrdinalIgnoreCase));
+                return;
+            }
+            finally { _stateFileHistoryNavigating = false; }
+        }
+    }
+
     private void RecordTabPair()
     {
         if (_tabHistoryNavigating || !_tabPairInitialized) return;
@@ -414,6 +468,7 @@ public partial class Form1 : Form
         {
             _tabHistoryBack.Push(_currentTabPair);
             _tabHistoryForward.Clear();
+            if (!_stateFileHistoryNavigating) _stateFileHistoryForward.Clear();
             _currentTabPair = pair;
         }
     }
@@ -657,6 +712,7 @@ public partial class Form1 : Form
 
     private void SubTabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        DiagnosticLog.Write($"TAB-CHANGE {NavigationLogContext()}");
         UpdateWindowTitle();
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);

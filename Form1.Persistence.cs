@@ -26,11 +26,12 @@ public partial class Form1
         var selectedFile = Path.GetFullPath(dialog.FileName);
         if (string.Equals(selectedFile, Path.GetFullPath(_stateFile), StringComparison.OrdinalIgnoreCase)) return;
 
-        SwitchToStateFile(selectedFile);
+        BeginInvoke(new Action(() => SwitchToStateFile(selectedFile)));
     }
 
     private void LoadState()
     {
+        DiagnosticLog.Write($"LOAD-STATE file={Path.GetFullPath(_stateFile)}");
         UpdateWindowTitle();
         if (!File.Exists(_stateFile))
         {
@@ -111,6 +112,7 @@ public partial class Form1
         }
         catch (Exception ex)
         {
+            DiagnosticLog.WriteException($"Loading state {_stateFile}", ex);
             // Write log to app directory. If this fails, the app will crash,
             // which is preferable to silent failure while debugging.
             File.WriteAllText(Path.Combine(Path.GetDirectoryName(_stateFile)!, "error.log"), ex.ToString());
@@ -159,32 +161,47 @@ public partial class Form1
                 Checked = string.Equals(path, _stateFile, StringComparison.OrdinalIgnoreCase),
                 DisplayStyle = ToolStripItemDisplayStyle.Text
             };
-            button.Click += (_, _) => SwitchToStateFile(path);
+            button.Click += (_, _) => BeginInvoke(new Action(() => SwitchToStateFile(path)));
             stateStrip.Items.Add(button);
         }
     }
 
-    private void SwitchToStateFile(string targetFile)
+    private void SwitchToStateFile(string targetFile, bool recordHistory = true)
     {
         targetFile = Path.GetFullPath(targetFile);
         if (string.Equals(targetFile, _stateFile, StringComparison.OrdinalIgnoreCase)) return;
+        DiagnosticLog.Write($"STATE-SWITCH from={_stateFile} to={targetFile}");
         try { SaveState(); }
         catch (Exception ex)
         {
+            DiagnosticLog.WriteException($"Saving state before switch to {targetFile}", ex);
             MessageBox.Show($"Could not save the current state.\n\n{ex.Message}",
                 "State switch failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
+        _tabHistoryByStateFile[_stateFile] = (_tabHistoryBack, _tabHistoryForward);
+        if (recordHistory)
+        {
+            _stateFileHistoryBack.Push(_stateFile);
+            _stateFileHistoryForward.Clear();
+            _tabHistoryForward.Clear();
+        }
         _stateFile = targetFile;
         RefreshStateFileButtons();
         try { SaveAppSettings(); }
         catch (Exception ex)
         {
+            DiagnosticLog.WriteException($"Saving settings after switch to {targetFile}", ex);
             MessageBox.Show($"Could not remember the selected state file.\n\n{ex.Message}",
                 "State file preference failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         ReloadState();
+        if (_tabHistoryByStateFile.Remove(_stateFile, out var tabHistory))
+        {
+            _tabHistoryBack = tabHistory.Back;
+            _tabHistoryForward = tabHistory.Forward;
+        }
     }
 
     private void LoadAppSettings()
