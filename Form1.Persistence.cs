@@ -128,6 +128,13 @@ public partial class Form1
     private void RefreshStateFileButtons()
     {
         stateStrip.Items.Clear();
+        var printButton = new ToolStripButton("Print")
+        {
+            Alignment = ToolStripItemAlignment.Left,
+            DisplayStyle = ToolStripItemDisplayStyle.Text
+        };
+        printButton.Click += (_, _) => PrintCurrentPage();
+        stateStrip.Items.Add(printButton);
         // shortcut: very long file lists can overflow this row; use a wrapping strip if needed.
         // shortcut: external JSON files appear after a state switch or restart; add a watcher for immediate discovery.
         var files = Directory.GetFiles(_stateDirectory, "*.json")

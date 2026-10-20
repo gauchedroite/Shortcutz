@@ -207,6 +207,13 @@ public partial class Form1 : Form
             SaveState();
             return;
         }
+        if (e.Control && e.KeyCode == Keys.P)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            PrintCurrentPage();
+            return;
+        }
         if (e.KeyCode == Keys.Escape && _searchPanel.Visible)
         {
             e.Handled = true;

@@ -70,6 +70,31 @@ internal sealed class MarkdownTextView : Control
         return layout.Height;
     }
 
+    internal (int Height, int NextOffset) DrawPrintPage(Graphics graphics, int width, int pageHeight, int offsetY)
+    {
+        using var layout = CreateLayout(Math.Max(1, width));
+        int pageLimit = Math.Min(layout.Height, offsetY + pageHeight);
+        int nextOffset = layout.Fragments
+            .Where(fragment => fragment.Bounds.Top >= offsetY && fragment.Bounds.Bottom <= pageLimit)
+            .Select(fragment => fragment.Bounds.Bottom)
+            .DefaultIfEmpty(pageLimit)
+            .Max();
+        if (nextOffset <= offsetY) nextOffset = pageLimit;
+
+        foreach (var fragment in layout.Fragments.Where(fragment =>
+                     fragment.Bounds.Bottom > offsetY && fragment.Bounds.Top < nextOffset))
+        {
+            var bounds = fragment.Bounds;
+            bounds.Y -= offsetY;
+            DrawText(graphics, fragment.Text, bounds.Left, bounds, fragment.Font, fragment.Color);
+        }
+
+        bool hasMore = layout.Fragments.Any(fragment => fragment.Bounds.Bottom > nextOffset);
+        int nextPageOffset = hasMore ? nextOffset : layout.Height;
+        Debug.Assert(nextPageOffset > offsetY || layout.Height <= offsetY);
+        return (layout.Height, nextPageOffset);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
