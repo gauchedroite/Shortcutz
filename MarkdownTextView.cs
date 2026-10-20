@@ -14,6 +14,7 @@ internal sealed class MarkdownTextView : Control
     private static readonly Regex Ordered = new(@"^\s*(\d+)[.)]\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex Quote = new(@"^\s*>\s?(.*)$", RegexOptions.Compiled);
     private string _markdown = "";
+    private readonly bool _allowTextSelection;
     private int _selectionStart;
     private int _selectionLength;
     private int _selectionAnchor;
@@ -53,12 +54,13 @@ internal sealed class MarkdownTextView : Control
         set { _markdown = value ?? ""; _selectionStart = _selectionLength = 0; Invalidate(); }
     }
 
-    public MarkdownTextView()
+    public MarkdownTextView(bool allowTextSelection = true)
     {
+        _allowTextSelection = allowTextSelection;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor |
-                 ControlStyles.Selectable, true);
-        TabStop = true;
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+        SetStyle(ControlStyles.Selectable, allowTextSelection);
+        TabStop = allowTextSelection;
         BackColor = Color.Transparent;
     }
 
@@ -127,7 +129,7 @@ internal sealed class MarkdownTextView : Control
         _selectionLayout = null;
         _selecting = false;
         _selectionMoved = false;
-        if (e.Button == MouseButtons.Left && e.Clicks == 1)
+        if (_allowTextSelection && e.Button == MouseButtons.Left && e.Clicks == 1)
         {
             Focus();
             var layout = CreateLayout(ClientSize.Width);
@@ -191,7 +193,7 @@ internal sealed class MarkdownTextView : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.Handled || !e.Control || e.KeyCode is not (Keys.A or Keys.C)) return;
+        if (!_allowTextSelection || e.Handled || !e.Control || e.KeyCode is not (Keys.A or Keys.C)) return;
         using var layout = CreateLayout(ClientSize.Width);
         if (e.KeyCode == Keys.A)
         {

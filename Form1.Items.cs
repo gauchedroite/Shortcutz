@@ -672,7 +672,7 @@ public partial class Form1
             Padding = new Padding(6),
             Tag = item
         };
-        var markdown = new MarkdownTextView
+        var markdown = new MarkdownTextView(allowTextSelection: false)
         {
             Location = new Point(6, 6),
             Size = new Size(Math.Max(1, item.Width - 14), 28),
