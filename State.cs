@@ -10,6 +10,7 @@ public sealed record TabState(string Name, List<PageState>? Pages = null,
     [property: System.Text.Json.Serialization.JsonPropertyName("Zoom")]
     float? LegacyZoom = null);
 public sealed record WindowState(int X, int Y, int Width, int Height);
+public sealed record AppSettings(int X, int Y, int Width, int Height);
 // CompactIcons fields are kept only to migrate older saved states.
 public sealed record AppState(List<TabState> Tabs, int SelectedTabIndex = 0, WindowState? Window = null, bool? ShowGridDots = false, bool? CompactIcons = null);
 
@@ -69,5 +70,5 @@ public sealed class Board
     public bool ShowGridDots;
     public event Action? Changed;
     public void Dirty() => Changed?.Invoke();
-    public AppState ToState(WindowState? window = null) => new(Tabs.ConvertAll(t => t.ToState()), SelectedIndex, window, ShowGridDots);
+    public AppState ToState() => new(Tabs.ConvertAll(t => t.ToState()), SelectedIndex, ShowGridDots: ShowGridDots);
 }

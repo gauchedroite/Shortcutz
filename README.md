@@ -7,7 +7,7 @@ Built with .NET 10 Windows Forms.
 ## Features
 
 - Boards and pages. Each top-level tab contains one or more pages. Pages can hold board items or plain text.
-- State file switching. Choose another JSON board file from the empty-board context menu.
+- State files. Buttons for all board JSON files in `%LocalAppData%\Shortcutz` appear at the top-right; click one to switch files. Choose a file elsewhere from the empty-board context menu.
 - Tabs and pages. Add, rename, delete, drag them to reorder, or right-click a page tab and choose **Move to** to place it under another tab.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
@@ -88,7 +88,7 @@ Shortcutz saves state when you press `Ctrl+S`, close the app, or switch state fi
 
 The state stores paths to files and folders. Shortcutz does not copy those items, except for dropped `.msg` files. It saves those files in `%LocalAppData%\Shortcutz\outlook` and stores their paths in the state. Removing a board item does not delete its source file or its saved `.msg` file.
 
-Shortcutz uses the last selected state file when it starts. If 7-Zip is installed, it stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
+Shortcutz uses the last selected state file when it starts. The window position and size are shared by all state files. If 7-Zip is installed, Shortcutz stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
 
 ## Build and run
 

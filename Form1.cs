@@ -31,12 +31,17 @@ public partial class Form1 : Form
     private readonly ContextMenuStrip _tabMenu;
     private readonly ContextMenuStrip _subTabMenu;
     private readonly ContextMenuStrip _workspaceMenu;
+    private readonly ToolStrip stateStrip;
     private readonly Stack<(int Top, int Sub)> _tabHistoryBack = new();
     private readonly Stack<(int Top, int Sub)> _tabHistoryForward = new();
     private (int Top, int Sub) _currentTabPair = (-1, -1);
     private bool _tabHistoryNavigating;
     private bool _tabPairInitialized;
     private readonly TabControl tabs;
+    private readonly string _stateDirectory;
+    private readonly string _appSettingsFile;
+    private bool _isInitialStateLoad = true;
+    private bool _hasGlobalWindowState;
     private readonly Board _board = new();
     private static readonly List<Item> _clipboard = new();
     private Point _lastWorkspaceMenuLocation;
@@ -56,10 +61,12 @@ public partial class Form1 : Form
 
     public Form1()
     {
+        stateStrip = new ToolStrip { Dock = DockStyle.Top, GripStyle = ToolStripGripStyle.Hidden };
         tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
         tabs.DrawItem += Tabs_DrawItem;
         SuspendLayout();
         Controls.Add(tabs);
+        Controls.Add(stateStrip);
         InitSearch();
         ClientSize = new Size(1000, 650);
         MinimumSize = new Size(400, 300);
@@ -136,13 +143,14 @@ public partial class Form1 : Form
             showGridItem.Checked = _showGridDots;
         });
 
-        var stateDirectory = Path.Combine(
+        _stateDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppDataDirName);
-        Directory.CreateDirectory(stateDirectory);
-        var defaultStateFile = Path.Combine(stateDirectory, "state.json");
-        _lastStateFilePath = Path.Combine(stateDirectory, "_last-state.txt");
+        Directory.CreateDirectory(_stateDirectory);
+        var defaultStateFile = Path.Combine(_stateDirectory, "state.json");
+        _appSettingsFile = Path.Combine(_stateDirectory, "_window-state.json");
+        _lastStateFilePath = Path.Combine(_stateDirectory, "_last-state.txt");
         _stateFile = defaultStateFile;
-        var oldPreferencePath = Path.Combine(stateDirectory, "last-state.txt");
+        var oldPreferencePath = Path.Combine(_stateDirectory, "last-state.txt");
         try
         {
             if (!File.Exists(_lastStateFilePath) && File.Exists(oldPreferencePath))
@@ -152,11 +160,13 @@ public partial class Form1 : Form
                 _stateFile = Path.GetFullPath(lastStateFile);
         }
         catch { }
+        RefreshStateFileButtons();
         tabs.Tag = _board.Tabs;
-        
         tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
 
+        LoadAppSettings();
         LoadState();
+        _isInitialStateLoad = false;
         showGridItem.Checked = _showGridDots;
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
@@ -619,7 +629,7 @@ public partial class Form1 : Form
     {
         var title = $"Shortcutz - {Path.GetFileName(_stateFile)}";
         if (tabs.SelectedTab is TabPage parentPage && SubTabsFromPage(parentPage).SelectedTab is TabPage childPage)
-            title += $" - {TabFromPage(parentPage).Name}/{PageFromSubPage(childPage).Name}";
+            title += $"/{TabFromPage(parentPage).Name}/{PageFromSubPage(childPage).Name}";
         Text = title;
     }
     private TabPage? SelectedSubPage => tabs.SelectedTab is TabPage p && SubTabsFromPage(p).SelectedTab is TabPage s ? s : null;

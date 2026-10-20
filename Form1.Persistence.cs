@@ -26,15 +26,7 @@ public partial class Form1
         var selectedFile = Path.GetFullPath(dialog.FileName);
         if (string.Equals(selectedFile, Path.GetFullPath(_stateFile), StringComparison.OrdinalIgnoreCase)) return;
 
-        SaveState();
-        _stateFile = selectedFile;
-        try { File.WriteAllText(_lastStateFilePath, _stateFile); }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not remember the selected state file.\n\n{ex.Message}",
-                "State file preference failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        ReloadState();
+        SwitchToStateFile(selectedFile);
     }
 
     private void LoadState()
@@ -114,21 +106,8 @@ public partial class Form1
             if (SelectedWorkspace() is Panel workspace)
                 ApplyZoom(workspace);
 
-            if (state.Window is not null)
-            {
-                StartPosition = FormStartPosition.Manual;
-                var w = Math.Max(MinimumSize.Width, state.Window.Width);
-                var h = Math.Max(MinimumSize.Height, state.Window.Height);
-                // Clamp onto a real screen: a saved position from a now-disconnected
-                // monitor would otherwise strand the window off-screen (taskbar icon only).
-                var screen = Screen.AllScreens.FirstOrDefault(s => s.Bounds.Contains(state.Window.X, state.Window.Y))
-                             ?? Screen.PrimaryScreen!;
-                var area = screen.WorkingArea;
-                var x = Math.Clamp(state.Window.X, area.Left, area.Right - 80);
-                var y = Math.Clamp(state.Window.Y, area.Top, area.Bottom - 40);
-                Location = new Point(x, y);
-                Size = new Size(w, h);
-            }
+            if (state.Window is not null && !_hasGlobalWindowState && _isInitialStateLoad)
+                ApplyWindowState(state.Window);
         }
         catch (Exception ex)
         {
@@ -146,6 +125,89 @@ public partial class Form1
         UpdateWindowTitle();
     }
 
+    private void RefreshStateFileButtons()
+    {
+        stateStrip.Items.Clear();
+        // shortcut: very long file lists can overflow this row; use a wrapping strip if needed.
+        // shortcut: external JSON files appear after a state switch or restart; add a watcher for immediate discovery.
+        var files = Directory.GetFiles(_stateDirectory, "*.json")
+            .Where(path => !string.Equals(Path.GetFullPath(path), _appSettingsFile, StringComparison.OrdinalIgnoreCase))
+            .Append(Path.Combine(_stateDirectory, "state.json"))
+            .Append(_stateFile)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => Path.GetFileName(path), StringComparer.CurrentCultureIgnoreCase)
+            .Reverse();
+        foreach (var file in files)
+        {
+            var path = Path.GetFullPath(file);
+            var button = new ToolStripButton(Path.GetFileName(path))
+            {
+                Alignment = ToolStripItemAlignment.Right,
+                Checked = string.Equals(path, _stateFile, StringComparison.OrdinalIgnoreCase),
+                DisplayStyle = ToolStripItemDisplayStyle.Text
+            };
+            button.Click += (_, _) => SwitchToStateFile(path);
+            stateStrip.Items.Add(button);
+        }
+    }
+
+    private void SwitchToStateFile(string targetFile)
+    {
+        targetFile = Path.GetFullPath(targetFile);
+        if (string.Equals(targetFile, _stateFile, StringComparison.OrdinalIgnoreCase)) return;
+        try { SaveState(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not save the current state.\n\n{ex.Message}",
+                "State switch failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _stateFile = targetFile;
+        RefreshStateFileButtons();
+        try { File.WriteAllText(_lastStateFilePath, _stateFile); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not remember the selected state file.\n\n{ex.Message}",
+                "State file preference failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        ReloadState();
+    }
+
+    private void LoadAppSettings()
+    {
+        if (!File.Exists(_appSettingsFile)) return;
+        try
+        {
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_appSettingsFile));
+            if (settings is null) return;
+            _hasGlobalWindowState = true;
+            ApplyWindowState(new WindowState(settings.X, settings.Y, settings.Width, settings.Height));
+        }
+        catch { }
+    }
+
+
+    private void ApplyWindowState(WindowState state)
+    {
+        StartPosition = FormStartPosition.Manual;
+        var w = Math.Max(MinimumSize.Width, state.Width);
+        var h = Math.Max(MinimumSize.Height, state.Height);
+        var screen = Screen.AllScreens.FirstOrDefault(s => s.Bounds.Contains(state.X, state.Y))
+                     ?? Screen.PrimaryScreen!;
+        var area = screen.WorkingArea;
+        Location = new Point(Math.Clamp(state.X, area.Left, area.Right - 80),
+            Math.Clamp(state.Y, area.Top, area.Bottom - 40));
+        Size = new Size(w, h);
+    }
+
+    private void SaveAppSettings()
+    {
+        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        var settings = new AppSettings(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        File.WriteAllText(_appSettingsFile, JsonSerializer.Serialize(settings));
+    }
+
     private void SaveState()
     {
         _board.SelectedIndex = tabs.SelectedIndex;
@@ -155,11 +217,10 @@ public partial class Form1
             var subTabs = SubTabsFromPage(tabs.TabPages[i]);
             _board.Tabs[i].SelectedPageIndex = subTabs.SelectedIndex;
         }
-        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
-        var window = new WindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height);
         var options = new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
-        var json = JsonSerializer.Serialize(_board.ToState(window), options);
+        var json = JsonSerializer.Serialize(_board.ToState(), options);
         File.WriteAllText(_stateFile, json);
+        SaveAppSettings();
         ArchiveStateBackup(json);
     }
 
