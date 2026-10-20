@@ -14,6 +14,14 @@ internal sealed class MarkdownTextView : Control
     private static readonly Regex Ordered = new(@"^\s*(\d+)[.)]\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex Quote = new(@"^\s*>\s?(.*)$", RegexOptions.Compiled);
     private string _markdown = "";
+    private int _selectionStart;
+    private int _selectionLength;
+    private int _selectionAnchor;
+    private Point _selectionOrigin;
+    private bool _selecting;
+    private bool _selectionMoved;
+    private bool _suppressNextClick;
+    private LayoutData? _selectionLayout;
 
     static MarkdownTextView()
     {
@@ -27,13 +35,14 @@ internal sealed class MarkdownTextView : Control
     private enum BlockKind { Paragraph, Heading, Unordered, Ordered, Quote, Code, Blank, Rule }
     private sealed record Block(BlockKind Kind, string Text = "", int Level = 0, string Prefix = "", int Nesting = 0);
     private sealed record Run(string Text, FontStyle Style = FontStyle.Regular, bool Code = false, string? Link = null);
-    private sealed record Fragment(string Text, Font Font, Color Color, Rectangle Bounds, string? Link);
+    private sealed record Fragment(string Text, Font Font, Color Color, Rectangle Bounds, string? Link, int Start);
     private sealed record LinkHit(Rectangle Bounds, string Url);
-    private sealed class LayoutData(List<Fragment> fragments, List<LinkHit> links, List<Font> fonts, int height) : IDisposable
+    private sealed class LayoutData(List<Fragment> fragments, List<LinkHit> links, List<Font> fonts, int height, string text) : IDisposable
     {
         public List<Fragment> Fragments { get; } = fragments;
         public List<LinkHit> Links { get; } = links;
         public int Height { get; } = height;
+        public string Text { get; } = text;
         public void Dispose() { foreach (var font in fonts) font.Dispose(); }
     }
 
@@ -41,13 +50,15 @@ internal sealed class MarkdownTextView : Control
     public string Markdown
     {
         get => _markdown;
-        set { _markdown = value ?? ""; Invalidate(); }
+        set { _markdown = value ?? ""; _selectionStart = _selectionLength = 0; Invalidate(); }
     }
 
     public MarkdownTextView()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor |
+                 ControlStyles.Selectable, true);
+        TabStop = true;
         BackColor = Color.Transparent;
     }
 
@@ -61,29 +72,186 @@ internal sealed class MarkdownTextView : Control
     {
         base.OnPaint(e);
         using var layout = CreateLayout(ClientSize.Width);
+        int selectionEnd = _selectionStart + _selectionLength;
         foreach (var fragment in layout.Fragments)
-            TextRenderer.DrawText(e.Graphics, fragment.Text, fragment.Font, fragment.Bounds,
-                fragment.Color, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+        {
+            int start = Math.Max(_selectionStart, fragment.Start);
+            int end = Math.Min(selectionEnd, fragment.Start + fragment.Text.Length);
+            if (start >= end)
+            {
+                DrawText(e.Graphics, fragment.Text, fragment.Bounds.Left, fragment.Bounds, fragment.Font, fragment.Color);
+                continue;
+            }
+
+            int beforeLength = start - fragment.Start;
+            int selectedLength = end - start;
+            string before = fragment.Text[..beforeLength];
+            string selected = fragment.Text.Substring(beforeLength, selectedLength);
+            string after = fragment.Text[(beforeLength + selectedLength)..];
+            int x = fragment.Bounds.Left;
+            if (before.Length > 0)
+            {
+                DrawText(e.Graphics, before, x, fragment.Bounds, fragment.Font, fragment.Color);
+                x += MeasureTextWidth(before, fragment.Font);
+            }
+            int selectedWidth = MeasureTextWidth(selected, fragment.Font);
+            e.Graphics.FillRectangle(SystemBrushes.Highlight,
+                new Rectangle(x, fragment.Bounds.Top, selectedWidth + 1, fragment.Bounds.Height));
+            DrawText(e.Graphics, selected, x, fragment.Bounds, fragment.Font, SystemColors.HighlightText);
+            x += selectedWidth;
+            DrawText(e.Graphics, after, x, fragment.Bounds, fragment.Font, fragment.Color);
+        }
         _linkHits = layout.Links;
     }
 
+    private static void DrawText(Graphics graphics, string text, int x, Rectangle bounds, Font font, Color color)
+    {
+        if (text.Length == 0) return;
+        TextRenderer.DrawText(graphics, text, font,
+            new Rectangle(x, bounds.Top, Math.Max(1, bounds.Right - x), bounds.Height), color,
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+    }
+
+    private static int MeasureTextWidth(string text, Font font) => text.Length == 0 ? 0 :
+        TextRenderer.MeasureText(text, font, Size.Empty,
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+
     private List<LinkHit> _linkHits = new();
+    internal bool IsTextSelecting => _selecting && _selectionMoved;
+    internal bool HasTextSelection => _selectionLength > 0;
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        _suppressNextClick = false;
+        _selectionLayout?.Dispose();
+        _selectionLayout = null;
+        _selecting = false;
+        _selectionMoved = false;
+        if (e.Button == MouseButtons.Left && e.Clicks == 1)
+        {
+            Focus();
+            var layout = CreateLayout(ClientSize.Width);
+            if (TryGetTextIndex(layout, e.Location, out int index))
+            {
+                _selectionLayout = layout;
+                _selecting = true;
+                _selectionAnchor = _selectionStart = index;
+                _selectionLength = 0;
+                _selectionOrigin = e.Location;
+                Capture = true;
+                Invalidate();
+            }
+            else layout.Dispose();
+        }
+        base.OnMouseDown(e);
+    }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        if (_selecting && e.Button == MouseButtons.Left && _selectionLayout is { } layout)
+        {
+            if (Math.Abs(e.X - _selectionOrigin.X) > 2 || Math.Abs(e.Y - _selectionOrigin.Y) > 2)
+                _selectionMoved = true;
+            int end = GetClosestTextIndex(layout, e.Location);
+            int start = Math.Min(_selectionAnchor, end);
+            int length = Math.Abs(end - _selectionAnchor);
+            if (start != _selectionStart || length != _selectionLength)
+            {
+                _selectionStart = start;
+                _selectionLength = length;
+                Invalidate();
+            }
+        }
         base.OnMouseMove(e);
         Cursor = _linkHits.Any(link => link.Bounds.Contains(e.Location)) ? Cursors.Hand : Cursors.Default;
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (e.Button != MouseButtons.Left) return;
+        _suppressNextClick = _selectionMoved;
+        _selecting = false;
+        _selectionMoved = false;
+        _selectionLayout?.Dispose();
+        _selectionLayout = null;
+        Capture = false;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _selectionLayout?.Dispose();
+            _selectionLayout = null;
+        }
+        base.Dispose(disposing);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled || !e.Control || e.KeyCode is not (Keys.A or Keys.C)) return;
+        using var layout = CreateLayout(ClientSize.Width);
+        if (e.KeyCode == Keys.A)
+        {
+            _selectionStart = 0;
+            _selectionLength = layout.Text.Length;
+            Invalidate();
+        }
+        else if (_selectionLength > 0)
+            Clipboard.SetText(layout.Text.Substring(_selectionStart, _selectionLength));
+        e.Handled = e.SuppressKeyPress = true;
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
+        if (_suppressNextClick) { _suppressNextClick = false; return; }
         if (e.Button != MouseButtons.Left) return;
         var hit = _linkHits.FirstOrDefault(link => link.Bounds.Contains(e.Location));
         if (hit is null || !Uri.TryCreate(hit.Url, UriKind.Absolute, out var uri)) return;
         uri = ExpandHomeFileUri(uri);
         try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
         catch { }
+    }
+
+    private static bool TryGetTextIndex(LayoutData layout, Point point, out int index)
+    {
+        foreach (var fragment in layout.Fragments)
+        {
+            if (!fragment.Bounds.Contains(point)) continue;
+            index = GetFragmentTextIndex(fragment, point.X);
+            return true;
+        }
+        index = 0;
+        return false;
+    }
+
+    private static int GetClosestTextIndex(LayoutData layout, Point point)
+    {
+        if (layout.Fragments.Count == 0) return 0;
+        var fragment = layout.Fragments.MinBy(f =>
+        {
+            int dx = point.X < f.Bounds.Left ? f.Bounds.Left - point.X : point.X > f.Bounds.Right ? point.X - f.Bounds.Right : 0;
+            int dy = point.Y < f.Bounds.Top ? f.Bounds.Top - point.Y : point.Y > f.Bounds.Bottom ? point.Y - f.Bounds.Bottom : 0;
+            return (long)dx * dx + (long)dy * dy;
+        })!;
+        return GetFragmentTextIndex(fragment, point.X);
+    }
+
+    private static int GetFragmentTextIndex(Fragment fragment, int x)
+    {
+        int target = Math.Clamp(x - fragment.Bounds.Left, 0, fragment.Bounds.Width);
+        int previousWidth = 0;
+        for (int i = 1; i <= fragment.Text.Length; i++)
+        {
+            int width = MeasureTextWidth(fragment.Text[..i], fragment.Font);
+            if (target < (previousWidth + width) / 2)
+                return fragment.Start + i - 1;
+            previousWidth = width;
+        }
+        return fragment.Start + fragment.Text.Length;
     }
 
     private static Uri ExpandHomeFileUri(Uri uri)
@@ -99,6 +267,8 @@ internal sealed class MarkdownTextView : Control
         var fragments = new List<Fragment>();
         var links = new List<LinkHit>();
         var fonts = new List<Font>();
+        var plainText = new StringBuilder();
+        bool firstBlock = true;
         var fontCache = new Dictionary<(int Heading, FontStyle Style, bool Code), Font>();
         Font GetFont(int heading, FontStyle style, bool code)
         {
@@ -115,6 +285,8 @@ internal sealed class MarkdownTextView : Control
         int y = 0;
         foreach (var block in ParseBlocks(_markdown))
         {
+            if (!firstBlock) plainText.Append('\n');
+            firstBlock = false;
             if (block.Kind == BlockKind.Blank)
             {
                 y += Math.Max(3, Font.Height / 2);
@@ -165,7 +337,9 @@ internal sealed class MarkdownTextView : Control
                     }
                     int drawWidth = Math.Max(1, Math.Min(textWidth, width - x));
                     var bounds = new Rectangle(x, y, drawWidth + 2, font.Height + 2);
-                    fragments.Add(new Fragment(text, font, color, bounds, run.Link));
+                    int start = plainText.Length;
+                    plainText.Append(text);
+                    fragments.Add(new Fragment(text, font, color, bounds, run.Link, start));
                     if (run.Link is not null) links.Add(new LinkHit(bounds, run.Link));
                     x += textWidth;
                     lineHeight = Math.Max(lineHeight, font.Height);
@@ -173,7 +347,7 @@ internal sealed class MarkdownTextView : Control
             }
             y += Math.Max(lineHeight, Font.Height) + (block.Kind == BlockKind.Heading ? 3 : 4);
         }
-        return new LayoutData(fragments, links, fonts, Math.Max(Font.Height, y));
+        return new LayoutData(fragments, links, fonts, Math.Max(Font.Height, y), plainText.ToString());
     }
 
     // shortcut: one level of bullet nesting only; use a full parser for nested ordered lists, deeper nesting, tables, or raw HTML.

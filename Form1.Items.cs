@@ -62,6 +62,12 @@ public partial class Form1
             c.MouseMove += (s, e) =>
             {
                 if (e.Button != MouseButtons.Left || !mouseDown) return;
+                if (c is MarkdownTextView { IsTextSelecting: true })
+                {
+                    mouseDown = false;
+                    dragging = false;
+                    return;
+                }
                 if (!dragging && (Math.Abs(e.X - dragOffset.X) > 2 || Math.Abs(e.Y - dragOffset.Y) > 2))
                 {
                     dragging = true;

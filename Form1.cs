@@ -313,6 +313,7 @@ public partial class Form1 : Form
         {
             if (e.KeyCode == Keys.C)
             {
+                if (SelectedWorkspace() is Panel activeWorkspace && HasFocusedMarkdownSelection(activeWorkspace)) return;
                 e.Handled = true;
                 if (SelectedWorkspace() is Panel workspace)
                     CopySelectedItems(workspace);
@@ -635,6 +636,9 @@ public partial class Form1 : Form
     private TabPage? SelectedSubPage => tabs.SelectedTab is TabPage p && SubTabsFromPage(p).SelectedTab is TabPage s ? s : null;
     private TabControl? SelectedSubTabs => tabs.SelectedTab is TabPage p ? SubTabsFromPage(p) : null;
     private Panel? SelectedWorkspace() => SelectedSubPage is TabPage sub ? WorkspaceFromSubPage(sub) : null;
+
+    private static bool HasFocusedMarkdownSelection(Control parent) => parent.Controls.Cast<Control>().Any(control =>
+        control is MarkdownTextView { Focused: true, HasTextSelection: true } || HasFocusedMarkdownSelection(control));
     private static Tab TabFromPage(TabPage page) => (Tab)page.Tag!;
     private static bool ItemExists(string path) => Directory.Exists(path) || File.Exists(path) || IsUrl(path);
 
