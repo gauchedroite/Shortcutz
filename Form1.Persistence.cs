@@ -136,10 +136,16 @@ public partial class Form1
             .Append(_stateFile)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => Path.GetFileName(path), StringComparer.CurrentCultureIgnoreCase)
-            .Reverse();
-        foreach (var file in files)
+            .Reverse()
+            .Select(Path.GetFullPath)
+            // shortcut: duplicate basenames cannot be ordered separately; use unique filenames when an external state file shares a name.
+            .OrderByDescending(path =>
+            {
+                var index = _stateFileOrder.FindIndex(saved => string.Equals(saved, Path.GetFileName(path), StringComparison.OrdinalIgnoreCase));
+                return index < 0 ? int.MaxValue : index;
+            });
+        foreach (var path in files)
         {
-            var path = Path.GetFullPath(file);
             var button = new ToolStripButton(Path.GetFileName(path))
             {
                 Alignment = ToolStripItemAlignment.Right,
@@ -165,7 +171,7 @@ public partial class Form1
 
         _stateFile = targetFile;
         RefreshStateFileButtons();
-        try { File.WriteAllText(_lastStateFilePath, _stateFile); }
+        try { SaveAppSettings(); }
         catch (Exception ex)
         {
             MessageBox.Show($"Could not remember the selected state file.\n\n{ex.Message}",
@@ -182,6 +188,14 @@ public partial class Form1
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_appSettingsFile));
             if (settings is null) return;
             _hasGlobalWindowState = true;
+            var lastStateFile = Path.GetFileName(settings.LastStateFile);
+            if (!string.IsNullOrEmpty(lastStateFile) && File.Exists(Path.Combine(_stateDirectory, lastStateFile)))
+                _stateFile = Path.Combine(_stateDirectory, lastStateFile);
+            _stateFileOrder = (settings.StateFileOrder ?? new List<string>())
+                .Select(Path.GetFileName)
+                .Where(name => !string.IsNullOrEmpty(name))
+                .Select(name => name!)
+                .ToList();
             ApplyWindowState(new WindowState(settings.X, settings.Y, settings.Width, settings.Height));
         }
         catch { }
@@ -204,8 +218,12 @@ public partial class Form1
     private void SaveAppSettings()
     {
         var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
-        var settings = new AppSettings(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        var settings = new AppSettings(bounds.X, bounds.Y, bounds.Width, bounds.Height, _stateFileOrder, Path.GetFileName(_stateFile));
         File.WriteAllText(_appSettingsFile, JsonSerializer.Serialize(settings));
+        foreach (var preferenceFile in new[] { "_last-state.txt", "last-state.txt" })
+        {
+            try { File.Delete(Path.Combine(_stateDirectory, preferenceFile)); } catch { }
+        }
     }
 
     private void SaveState()

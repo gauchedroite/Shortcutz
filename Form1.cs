@@ -26,7 +26,6 @@ public partial class Form1 : Form
     private const string AppDataDirName = "Shortcutz";
 
     private string _stateFile;
-    private readonly string _lastStateFilePath;
     private static readonly string? _sevenZip = Find7z();
     private readonly ContextMenuStrip _tabMenu;
     private readonly ContextMenuStrip _subTabMenu;
@@ -40,6 +39,7 @@ public partial class Form1 : Form
     private readonly TabControl tabs;
     private readonly string _stateDirectory;
     private readonly string _appSettingsFile;
+    private List<string> _stateFileOrder = new();
     private bool _isInitialStateLoad = true;
     private bool _hasGlobalWindowState;
     private readonly Board _board = new();
@@ -148,23 +148,26 @@ public partial class Form1 : Form
         Directory.CreateDirectory(_stateDirectory);
         var defaultStateFile = Path.Combine(_stateDirectory, "state.json");
         _appSettingsFile = Path.Combine(_stateDirectory, "_window-state.json");
-        _lastStateFilePath = Path.Combine(_stateDirectory, "_last-state.txt");
         _stateFile = defaultStateFile;
-        var oldPreferencePath = Path.Combine(_stateDirectory, "last-state.txt");
         try
         {
-            if (!File.Exists(_lastStateFilePath) && File.Exists(oldPreferencePath))
-                File.Move(oldPreferencePath, _lastStateFilePath);
-            var lastStateFile = File.ReadAllText(_lastStateFilePath).Trim();
-            if (!string.IsNullOrEmpty(lastStateFile) && File.Exists(lastStateFile))
-                _stateFile = Path.GetFullPath(lastStateFile);
+            foreach (var preferenceFile in new[] { "_last-state.txt", "last-state.txt" })
+            {
+                var path = Path.Combine(_stateDirectory, preferenceFile);
+                var lastStateFile = File.Exists(path) ? File.ReadAllText(path).Trim() : "";
+                if (!string.IsNullOrEmpty(lastStateFile) && File.Exists(lastStateFile))
+                {
+                    _stateFile = Path.GetFullPath(lastStateFile);
+                    break;
+                }
+            }
         }
         catch { }
-        RefreshStateFileButtons();
         tabs.Tag = _board.Tabs;
         tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
 
         LoadAppSettings();
+        RefreshStateFileButtons();
         LoadState();
         _isInitialStateLoad = false;
         showGridItem.Checked = _showGridDots;

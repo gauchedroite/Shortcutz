@@ -88,7 +88,7 @@ Shortcutz saves state when you press `Ctrl+S`, close the app, or switch state fi
 
 The state stores paths to files and folders. Shortcutz does not copy those items, except for dropped `.msg` files. It saves those files in `%LocalAppData%\Shortcutz\outlook` and stores their paths in the state. Removing a board item does not delete its source file or its saved `.msg` file.
 
-Shortcutz uses the last selected state file when it starts. The window position and size are shared by all state files. If 7-Zip is installed, Shortcutz stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
+Shortcutz stores the last selected state file, button order, and shared window position and size in `%LocalAppData%\Shortcutz\_window-state.json`. `LastStateFile` contains only the file name and resolves under `%LocalAppData%\Shortcutz`; files selected from elsewhere cannot be remembered across restarts. With Shortcutz closed, set the button order by editing `StateFileOrder` in `%LocalAppData%\Shortcutz\_window-state.json`; list file names only, in the desired order (for example, `state.json`, `work.json`). Unlisted files use the default order. If 7-Zip is installed, Shortcutz stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
 
 ## Build and run
 
