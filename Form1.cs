@@ -80,7 +80,7 @@ public partial class Form1 : Form
         ResumeLayout(false);
 
         _tabMenu = new ContextMenuStrip();
-        _tabMenu.Items.Add("Add tab", null, (s, e) => { AddTab("New tab", tabs.SelectedIndex + 1); _board.Dirty(); });
+        _tabMenu.Items.Add("Add tab", null, (s, e) => { if (AddTab("New tab", tabs.SelectedIndex + 1, promptForName: true) is not null) _board.Dirty(); });
         _tabMenu.Items.Add("Rename", null, RenameTab);
         _tabMenu.Items.Add("Delete", null, CloseTab);
         tabs.ContextMenuStrip = _tabMenu;
@@ -92,8 +92,8 @@ public partial class Form1 : Form
 
         _subTabMenu = new ContextMenuStrip();
         var moveSubTabMenu = new ToolStripMenuItem("Move to");
-        _subTabMenu.Items.Add("Add page", null, (s, e) => { AddPage("New page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
-        _subTabMenu.Items.Add("Add text page", null, (s, e) => { AddTextPage("New text page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
+        _subTabMenu.Items.Add("Add page", null, (s, e) => { if (AddPage("New page", SelectedSubTabs?.SelectedIndex + 1 ?? -1) is not null) _board.Dirty(); });
+        _subTabMenu.Items.Add("Add text page", null, (s, e) => { if (AddTextPage("New text page", SelectedSubTabs?.SelectedIndex + 1 ?? -1) is not null) _board.Dirty(); });
         var monospaceItem = new ToolStripMenuItem("Monospace font") { CheckOnClick = true };
         monospaceItem.Click += (s, e) =>
         {
@@ -418,7 +418,7 @@ public partial class Form1 : Form
 
     // ---------- tabs ----------
 
-    private Tab AddTab(string name, int index = -1)
+    private Tab? AddTab(string name, int index = -1, bool promptForName = false)
     {
         var tab = new Tab(name);
         tab.Pages.Add(new Page("Page 1"));
@@ -426,39 +426,71 @@ public partial class Form1 : Form
             _board.Tabs.Add(tab);
         else
             _board.Tabs.Insert(index, tab);
-        CreateTabPage(tab, index);
+        var previousTabPage = tabs.SelectedTab;
+        var tabPage = CreateTabPage(tab, index);
+        if (!promptForName) return tab;
+
+        var newName = Prompt("Rename tab", "Tab name:", tab.Name);
+        if (newName is null)
+        {
+            _board.Tabs.Remove(tab);
+            foreach (TabPage subPage in SubTabsFromPage(tabPage).TabPages)
+                _populatedSubPages.Remove(subPage);
+            tabs.TabPages.Remove(tabPage);
+            tabPage.Dispose();
+            if (previousTabPage is not null) tabs.SelectedTab = previousTabPage;
+            return null;
+        }
+        if (!string.IsNullOrWhiteSpace(newName))
+        {
+            tab.Name = newName;
+            tabPage.Text = newName;
+            UpdateWindowTitle();
+        }
         return tab;
     }
 
-    private Page AddPage(string name, int index = -1)
+    private Page? AddPage(string name, int index = -1)
     {
         var tab = TabFromPage(tabs.SelectedTab!);
         var page = new Page(name);
         var subTabs = SelectedSubTabs!;
+        var previousPage = subTabs.SelectedTab;
+        var subPage = CreateSubPage(page);
         if (index < 0 || index >= subTabs.TabPages.Count)
         {
             tab.Pages.Add(page);
-            subTabs.TabPages.Add(CreateSubPage(page));
+            subTabs.TabPages.Add(subPage);
         }
         else
         {
             tab.Pages.Insert(index, page);
-            subTabs.TabPages.Insert(index, CreateSubPage(page));
+            subTabs.TabPages.Insert(index, subPage);
         }
         subTabs.SelectedIndex = index < 0 ? subTabs.TabPages.Count - 1 : index;
 
         var newName = Prompt("Rename page", "Page name:", page.Name);
+        if (newName is null)
+        {
+            tab.Pages.Remove(page);
+            _populatedSubPages.Remove(subPage);
+            subTabs.TabPages.Remove(subPage);
+            subPage.Dispose();
+            if (previousPage is not null) subTabs.SelectedTab = previousPage;
+            return null;
+        }
         if (!string.IsNullOrWhiteSpace(newName))
         {
             page.Name = newName;
-            subTabs.SelectedTab!.Text = newName;
+            subPage.Text = newName;
         }
         return page;
     }
 
-    private Page AddTextPage(string name, int index = -1)
+    private Page? AddTextPage(string name, int index = -1)
     {
         var page = AddPage(name, index);
+        if (page is null) return null;
         page.Type = "Text";
         if (SelectedWorkspace() is Panel workspace)
             UpdateTextPageView(workspace, page);
