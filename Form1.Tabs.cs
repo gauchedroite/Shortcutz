@@ -105,6 +105,39 @@ public partial class Form1
     private void RenameTab(object? sender, EventArgs e) => RenameTabIn(tabs);
     private void RenameSubTab(object? sender, EventArgs e) => RenameTabIn(SelectedSubTabs!);
 
+    private void MoveSubTabTo(Tab target)
+    {
+        if (tabs.SelectedTab is not TabPage parentPage || SelectedSubTabs is not TabControl sourceTabs ||
+            SelectedSubPage is not TabPage subPage) return;
+        var source = TabFromPage(parentPage);
+        var targetIndex = _board.Tabs.IndexOf(target);
+        var page = PageFromSubPage(subPage);
+        var sourceIndex = source.Pages.IndexOf(page);
+        if (source == target || targetIndex < 0 || targetIndex >= tabs.TabPages.Count ||
+            sourceIndex < 0 || sourceIndex >= sourceTabs.TabPages.Count ||
+            !ReferenceEquals(sourceTabs.TabPages[sourceIndex], subPage)) return;
+
+        var targetTabs = SubTabsFromPage(tabs.TabPages[targetIndex]);
+        ActiveControl = null;
+        sourceTabs.TabPages.RemoveAt(sourceIndex);
+        source.Pages.RemoveAt(sourceIndex);
+        target.Pages.Add(page);
+        targetTabs.TabPages.Add(subPage);
+
+        if (source.Pages.Count == 0)
+        {
+            var replacement = new Page("Page 1");
+            source.Pages.Add(replacement);
+            sourceTabs.TabPages.Add(CreateSubPage(replacement));
+        }
+
+        tabs.SelectedIndex = targetIndex;
+        targetTabs.SelectedTab = subPage;
+        Debug.Assert(source.Pages.SequenceEqual(sourceTabs.TabPages.Cast<TabPage>().Select(PageFromSubPage)));
+        Debug.Assert(target.Pages.SequenceEqual(targetTabs.TabPages.Cast<TabPage>().Select(PageFromSubPage)));
+        _board.Dirty();
+    }
+
     private void RenameTabIn(TabControl tc)
     {
         if (tc.SelectedTab is null) return;
@@ -123,6 +156,7 @@ public partial class Form1
             case Page page: page.Name = name; break;
         }
         tc.SelectedTab.Text = name;
+        UpdateWindowTitle();
         _board.Dirty();
     }
 

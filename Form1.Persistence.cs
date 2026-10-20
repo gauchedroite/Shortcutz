@@ -39,10 +39,11 @@ public partial class Form1
 
     private void LoadState()
     {
-        Text = $"Shortcutz - {Path.GetFileName(_stateFile)}";
+        UpdateWindowTitle();
         if (!File.Exists(_stateFile))
         {
             AddTab("Board");
+            UpdateWindowTitle();
             return;
         }
 
@@ -142,6 +143,7 @@ public partial class Form1
             tabs.TabPages.Clear();
             AddTab("Board");
         }
+        UpdateWindowTitle();
     }
 
     private void SaveState()

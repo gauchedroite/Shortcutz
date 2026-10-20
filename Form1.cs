@@ -84,6 +84,7 @@ public partial class Form1 : Form
         tabs.MouseUp += Tabs_MouseUpReorder;
 
         _subTabMenu = new ContextMenuStrip();
+        var moveSubTabMenu = new ToolStripMenuItem("Move to");
         _subTabMenu.Items.Add("Add page", null, (s, e) => { AddPage("New page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
         _subTabMenu.Items.Add("Add text page", null, (s, e) => { AddTextPage("New text page", SelectedSubTabs?.SelectedIndex + 1 ?? -1); _board.Dirty(); });
         var monospaceItem = new ToolStripMenuItem("Monospace font") { CheckOnClick = true };
@@ -103,11 +104,18 @@ public partial class Form1 : Form
         _subTabMenu.Opening += (s, e) =>
         {
             var page = SelectedSubPage is TabPage subPage ? PageFromSubPage(subPage) : null;
+            var parent = tabs.SelectedTab is TabPage parentPage ? TabFromPage(parentPage) : null;
+            moveSubTabMenu.DropDownItems.Clear();
+            if (parent is not null)
+                foreach (var target in _board.Tabs.Where(tab => tab != parent))
+                    moveSubTabMenu.DropDownItems.Add(target.Name, null, (_, _) => MoveSubTabTo(target));
+            moveSubTabMenu.Enabled = moveSubTabMenu.DropDownItems.Count > 0;
             monospaceItem.Enabled = page?.Type == "Text" && page.MarkdownPreview == false;
             previewItem.Enabled = page?.Type == "Text";
             monospaceItem.Checked = page?.Monospace == true;
             previewItem.Checked = page?.MarkdownPreview == true;
         };
+        _subTabMenu.Items.Add(moveSubTabMenu);
         _subTabMenu.Items.Add("Rename", null, RenameSubTab);
         _subTabMenu.Items.Add("Delete", null, CloseSubTab);
 
@@ -163,6 +171,7 @@ public partial class Form1 : Form
 
     private void Tabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        UpdateWindowTitle();
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
@@ -595,6 +604,7 @@ public partial class Form1 : Form
 
     private void SubTabs_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        UpdateWindowTitle();
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
@@ -605,6 +615,13 @@ public partial class Form1 : Form
     private static Panel WorkspaceFromSubPage(TabPage sub) => (Panel)sub.Controls[0];
     private static Page PageFromSubPage(TabPage sub) => (Page)sub.Tag!;
     private static Page PageFromWorkspace(Panel workspace) => (Page)workspace.Tag!;
+    private void UpdateWindowTitle()
+    {
+        var title = $"Shortcutz - {Path.GetFileName(_stateFile)}";
+        if (tabs.SelectedTab is TabPage parentPage && SubTabsFromPage(parentPage).SelectedTab is TabPage childPage)
+            title += $" - {TabFromPage(parentPage).Name}/{PageFromSubPage(childPage).Name}";
+        Text = title;
+    }
     private TabPage? SelectedSubPage => tabs.SelectedTab is TabPage p && SubTabsFromPage(p).SelectedTab is TabPage s ? s : null;
     private TabControl? SelectedSubTabs => tabs.SelectedTab is TabPage p ? SubTabsFromPage(p) : null;
     private Panel? SelectedWorkspace() => SelectedSubPage is TabPage sub ? WorkspaceFromSubPage(sub) : null;
