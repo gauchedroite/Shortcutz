@@ -369,6 +369,13 @@ public partial class Form1 : Form
     private void ReloadState()
     {
         ActiveControl = null;
+        // Stop recording before tearing down pages: TabPages.Clear() fires
+        // SelectedIndexChanged and would push garbage pairs onto the tab
+        // history that _tabHistoryByStateFile keeps for this state file.
+        _currentTabPair = (-1, -1);
+        _tabPairInitialized = false;
+        _tabHistoryBack = new Stack<(int Top, int Sub)>();
+        _tabHistoryForward = new Stack<(int Top, int Sub)>();
         foreach (TabPage page in tabs.TabPages.Cast<TabPage>().ToList())
         {
             var subTabs = SubTabsFromPage(page);
@@ -382,10 +389,6 @@ public partial class Form1 : Form
         tabs.TabPages.Clear();
         _board.Tabs.Clear();
         _populatedSubPages.Clear();
-        _tabHistoryBack = new Stack<(int Top, int Sub)>();
-        _tabHistoryForward = new Stack<(int Top, int Sub)>();
-        _currentTabPair = (-1, -1);
-        _tabPairInitialized = false;
         LoadState();
         _currentTabPair = GetCurrentTabPair();
         _tabPairInitialized = true;
