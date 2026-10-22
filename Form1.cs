@@ -141,6 +141,10 @@ public partial class Form1 : Form
         _workspaceMenu.Items.Add(showGridItem);
         _workspaceMenu.Items.Add("Paste", null, (s, e) => PasteItems(_lastWorkspaceMenuLocation));
         _workspaceMenu.Items.Add(new ToolStripSeparator());
+        var schedulerMenu = new ToolStripMenuItem("Scheduler");
+        schedulerMenu.DropDownItems.Add("Add task...", null, (s, e) => SchedulerAddTask());
+        schedulerMenu.DropDownItems.Add("List tasks...", null, (s, e) => SchedulerListTasks());
+        _workspaceMenu.Items.Add(schedulerMenu);
         _workspaceMenu.Items.Add("Switch state file...", null, (s, e) =>
         {
             SwitchStateFile();
@@ -286,6 +290,12 @@ public partial class Form1 : Form
             e.Handled = true;
             try { Process.Start(new ProcessStartInfo(FindReadme() ?? "README.md") { UseShellExecute = true }); }
             catch { }
+            return;
+        }
+        if (e.KeyCode == Keys.F12)
+        {
+            e.Handled = true;
+            SchedulerAddTask();
             return;
         }
         if (ActiveControl is TextBox) return;
