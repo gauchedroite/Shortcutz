@@ -20,6 +20,7 @@ Built with .NET 10 Windows Forms.
 - Compact icons. Select icons and press `Ctrl+M` to change their layout.
 - Notepad++. Hold `Shift` and double-click a file item to open it in Notepad++.
 - Grid dots. Right-click an empty part of a board to show or hide the grid.
+- Scheduled notifications. Right-click an empty part of a board to add a notification as a single line of text, or to list the pending ones. Shortcutz sends the line to the [remember-the-milk](https://github.com/gauchedroite/remember-the-milk) scheduler (`http://localhost:8181`), which parses it, schedules it, and notifies you on your ntfy channel at the scheduled time. The scheduler must be running.
 
 ## Markdown in Shortcutz
 
@@ -74,6 +75,7 @@ This is not a full CommonMark parser. Nested bullet lists support one level only
 | Reload state from disk | `Ctrl+R` |
 | Toggle Markdown preview on a text page | `F5` |
 | Open a file in Notepad++ | `Shift` + double-click |
+| Add a scheduled notification | `F12` |
 | Open this README | `F1` |
 
 ## State

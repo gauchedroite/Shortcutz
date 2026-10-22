@@ -12,7 +12,7 @@ public partial class Form1
 
     private async void SchedulerAddTask()
     {
-        var query = Prompt("Add scheduled task", "Task (single line):", "");
+        var query = Prompt("Add scheduled notification", "Notification (single line):", "");
         if (string.IsNullOrWhiteSpace(query)) return;
         try
         {
@@ -21,17 +21,17 @@ public partial class Form1
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                MessageBox.Show(this, body, "Could not add task", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, body, "Could not add notification", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             var task = JsonSerializer.Deserialize<JsonElement>(body);
             var description = task.TryGetProperty("description", out var d) ? d.GetString() : query;
             var next = task.TryGetProperty("nextOccurrence", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : "";
-            MessageBox.Show(this, $"Scheduled: {description}\nNext: {next}", "Task added", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, $"Scheduled: {description}\nNext: {next}", "Notification added", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Could not add task", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, "Could not add notification", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -50,12 +50,12 @@ public partial class Form1
                 lines.AppendLine($"{next,-20} {type,-8} {description}");
             }
             MessageBox.Show(this,
-                lines.Length == 0 ? "No scheduled tasks." : lines.ToString(),
-                "Scheduled tasks", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lines.Length == 0 ? "No scheduled notifications." : lines.ToString(),
+                "Scheduled notifications", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Could not list tasks", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, "Could not list notifications", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }
