@@ -7,10 +7,10 @@ Built with .NET 10 Windows Forms.
 ## Features
 
 - Boards and pages. Each top-level tab contains one or more pages. Pages can hold board items or plain text.
-- State files. Buttons for all board JSON files in `%LocalAppData%\Shortcutz` appear at the top-right; click one to switch files. Choose a file elsewhere from the empty-board context menu.
+- State files. Buttons for all board JSON files in `%LocalAppData%\GaucheDroite\Shortcutz` appear at the top-right; click one to switch files. Choose a file elsewhere from the empty-board context menu.
 - Tabs and pages. Add, rename, delete, drag them to reorder, or right-click a page tab and choose **Move to** to place it under another tab.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
-- Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\Shortcutz\outlook`. The state file stores only the path to each saved message.
+- Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\GaucheDroite\Shortcutz\outlook`. The state file stores only the path to each saved message.
 - Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
 - Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [Markdown in Shortcutz](#markdown-in-shortcutz) for supported syntax and limits.
 - Notes render Markdown; double-click to edit the source. Icon labels support bold with `**text**`.
@@ -83,18 +83,18 @@ This is not a full CommonMark parser. Nested bullet lists support one level only
 Shortcutz stores board data in a JSON file. The default file is:
 
 ```text
-%LocalAppData%\Shortcutz\state.json
+%LocalAppData%\GaucheDroite\Shortcutz\state.json
 ```
 
 Shortcutz saves state when you press `Ctrl+S`, close the app, or switch state files. Right-click an empty board and choose **Switch state file...** to use another JSON file. Shortcutz saves the current state before it switches files.
 
-The state stores paths to files and folders. Shortcutz does not copy those items, except for dropped `.msg` files. It saves those files in `%LocalAppData%\Shortcutz\outlook` and stores their paths in the state. Removing a board item does not delete its source file or its saved `.msg` file.
+The state stores paths to files and folders. Shortcutz does not copy those items, except for dropped `.msg` files. It saves those files in `%LocalAppData%\GaucheDroite\Shortcutz\outlook` and stores their paths in the state. Removing a board item does not delete its source file or its saved `.msg` file.
 
-Shortcutz stores the last selected state file, button order, and shared window position and size in `%LocalAppData%\Shortcutz\_window-state.json`. `LastStateFile` contains only the file name and resolves under `%LocalAppData%\Shortcutz`; files selected from elsewhere cannot be remembered across restarts. With Shortcutz closed, set the button order by editing `StateFileOrder` in `%LocalAppData%\Shortcutz\_window-state.json`; list file names only, in the desired order (for example, `state.json`, `work.json`). Unlisted files use the default order. If 7-Zip is installed, Shortcutz stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
+Shortcutz stores the last selected state file, button order, and shared window position and size in `%LocalAppData%\GaucheDroite\Shortcutz\_window-state.json`. `LastStateFile` contains only the file name and resolves under `%LocalAppData%\GaucheDroite\Shortcutz`; files selected from elsewhere cannot be remembered across restarts. With Shortcutz closed, set the button order by editing `StateFileOrder` in `%LocalAppData%\GaucheDroite\Shortcutz\_window-state.json`; list file names only, in the desired order (for example, `state.json`, `work.json`). Unlisted files use the default order. If 7-Zip is installed, Shortcutz stores compressed backups beside the active state file. If a state file cannot load, Shortcutz saves a `.corrupt` copy beside it.
 
 ## Build and run
 
-Requires the .NET 10 SDK and Windows. Each build copies `README.md` to `%LocalAppData%\Shortcutz\README.md`. Press `F1` in the app to open that copy.
+Requires the .NET 10 SDK and Windows. Each build copies `README.md` to `%LocalAppData%\GaucheDroite\Shortcutz\README.md`. Press `F1` in the app to open that copy.
 
 ```bash
 dotnet build

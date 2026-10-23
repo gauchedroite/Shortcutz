@@ -15,9 +15,9 @@
   </ItemGroup>
 
   <Target Name="CopyReadmeToStateFolder" AfterTargets="Build">
-    <MakeDir Directories="$(LOCALAPPDATA)\Shortcutz" />
+    <MakeDir Directories="$(LOCALAPPDATA)\GaucheDroite\Shortcutz" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)\README.md"
-          DestinationFiles="$(LOCALAPPDATA)\Shortcutz\README.md" />
+          DestinationFiles="$(LOCALAPPDATA)\GaucheDroite\Shortcutz\README.md" />
   </Target>
 
 </Project>

@@ -12,7 +12,7 @@ internal static class DiagnosticLog
         try
         {
             var directory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Shortcutz");
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GaucheDroite\\Shortcutz");
             Directory.CreateDirectory(directory);
             FilePath = Path.Combine(directory, "diagnostics.log");
             _writer = new StreamWriter(new FileStream(

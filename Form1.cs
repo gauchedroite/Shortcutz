@@ -23,7 +23,7 @@ public partial class Form1 : Form
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
-    private const string AppDataDirName = "Shortcutz";
+    private const string AppDataDirName = "GaucheDroite\\Shortcutz";
 
     private string _stateFile;
     private static readonly string? _sevenZip = Find7z();
