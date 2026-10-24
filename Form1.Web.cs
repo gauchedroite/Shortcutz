@@ -28,6 +28,14 @@ public partial class Form1
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+            // Once the web page has focus, WinForms KeyDown never fires, so catch
+            // F11 inside the page and message it back to the host.
+            await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                "window.addEventListener('keydown',e=>{if(e.key==='F11'){e.preventDefault();window.chrome.webview.postMessage('f11-toggle');}});");
+            _webView.CoreWebView2.WebMessageReceived += (s, e) =>
+            {
+                if (e.TryGetWebMessageAsString() == "f11-toggle") HideWebView();
+            };
             Controls.Add(_webView);
             _webView.BringToFront();
         }

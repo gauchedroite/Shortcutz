@@ -77,6 +77,7 @@ This is not a full CommonMark parser. Nested bullet lists support one level only
 | Toggle Markdown preview on a text page | `F5` |
 | Open a file in Notepad++ | `Shift` + double-click |
 | Open a URL item in the web view | `Ctrl` + double-click |
+| Toggle web view | `F11` |
 | Open the scheduler in the app | `F12` |
 | Open this README | `F1` |
 

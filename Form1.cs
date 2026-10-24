@@ -293,6 +293,14 @@ public partial class Form1 : Form
             catch { }
             return;
         }
+        if (e.KeyCode == Keys.F11)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            if (_webView is { Visible: true }) HideWebView();
+            else ShowWebView();
+            return;
+        }
         if (e.KeyCode == Keys.F12)
         {
             e.Handled = true;
