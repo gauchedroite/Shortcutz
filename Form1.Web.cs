@@ -14,10 +14,11 @@ public partial class Form1
             _webView = new WebView2 { Dock = DockStyle.Fill };
             try
             {
+                // local-only: syncing the WebView2 cache to Drive fails (locked files) and wastes quota.
                 await _webView.EnsureCoreWebView2Async(await CoreWebView2Environment.CreateAsync(
                     userDataFolder: Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "GaucheDroite", "Shortcutz", "webview")));
+                        "Shortcutz", "webview")));
             }
             catch (Exception ex)
             {
