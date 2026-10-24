@@ -158,6 +158,7 @@ public partial class Form1
             .Append(Path.Combine(_stateDirectory, "state.json"))
             .Append(_stateFile)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(File.Exists)
             .OrderBy(path => Path.GetFileName(path), StringComparer.CurrentCultureIgnoreCase)
             .Reverse()
             .Select(Path.GetFullPath)
