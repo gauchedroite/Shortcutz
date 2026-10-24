@@ -14,10 +14,13 @@
     <EmbeddedResource Include="app.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
   <Target Name="CopyReadmeToStateFolder" AfterTargets="Build">
     <MakeDir Directories="$(LOCALAPPDATA)\GaucheDroite\Shortcutz" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\README.md"
-          DestinationFiles="$(LOCALAPPDATA)\GaucheDroite\Shortcutz\README.md" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\README.md" DestinationFiles="$(LOCALAPPDATA)\GaucheDroite\Shortcutz\README.md" />
   </Target>
 
 </Project>

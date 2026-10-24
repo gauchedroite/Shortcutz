@@ -130,6 +130,20 @@ public partial class Form1
     private void RefreshStateFileButtons()
     {
         stateStrip.Items.Clear();
+        var homeButton = new ToolStripButton("Shortcutz")
+        {
+            Alignment = ToolStripItemAlignment.Left,
+            DisplayStyle = ToolStripItemDisplayStyle.Text
+        };
+        homeButton.Click += (_, _) => HideWebView();
+        stateStrip.Items.Add(homeButton);
+        var webButton = new ToolStripButton("Web")
+        {
+            Alignment = ToolStripItemAlignment.Left,
+            DisplayStyle = ToolStripItemDisplayStyle.Text
+        };
+        webButton.Click += (_, _) => ShowWebView();
+        stateStrip.Items.Add(webButton);
         var printButton = new ToolStripButton("Print")
         {
             Alignment = ToolStripItemAlignment.Left,
@@ -170,6 +184,7 @@ public partial class Form1
     {
         targetFile = Path.GetFullPath(targetFile);
         if (string.Equals(targetFile, _stateFile, StringComparison.OrdinalIgnoreCase)) return;
+        HideWebView();
         DiagnosticLog.Write($"STATE-SWITCH from={_stateFile} to={targetFile}");
         try { SaveState(); }
         catch (Exception ex)

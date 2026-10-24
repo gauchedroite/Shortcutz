@@ -142,6 +142,7 @@ public partial class Form1 : Form
         _workspaceMenu.Items.Add("Paste", null, (s, e) => PasteItems(_lastWorkspaceMenuLocation));
         _workspaceMenu.Items.Add(new ToolStripSeparator());
         var schedulerMenu = new ToolStripMenuItem("Scheduler");
+        schedulerMenu.DropDownItems.Add("Open scheduler (F12)", null, (s, e) => ShowWebView(SchedulerApi + "/"));
         schedulerMenu.DropDownItems.Add("Add notification...", null, (s, e) => SchedulerAddTask());
         schedulerMenu.DropDownItems.Add("List notifications...", null, (s, e) => SchedulerListTasks());
         _workspaceMenu.Items.Add(schedulerMenu);
@@ -295,7 +296,7 @@ public partial class Form1 : Form
         if (e.KeyCode == Keys.F12)
         {
             e.Handled = true;
-            SchedulerAddTask();
+            ShowWebView(SchedulerApi + "/");
             return;
         }
         if (ActiveControl is TextBox) return;

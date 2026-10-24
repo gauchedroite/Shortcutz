@@ -447,6 +447,11 @@ public partial class Form1
                         MessageBoxIcon.Warning);
                     return;
                 }
+                if ((Control.ModifierKeys & Keys.Control) != 0 && IsUrl(item.Path))
+                {
+                    ShowWebView(NormalizeUrl(item.Path));
+                    return;
+                }
                 if ((Control.ModifierKeys & Keys.Shift) != 0
                     && !IsUrl(item.Path) && !Directory.Exists(item.Path)
                     && FindNotepadPlus() is string npp)
