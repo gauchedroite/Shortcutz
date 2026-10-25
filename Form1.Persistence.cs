@@ -184,8 +184,8 @@ public partial class Form1
     private void SwitchToStateFile(string targetFile, bool recordHistory = true)
     {
         targetFile = Path.GetFullPath(targetFile);
-        if (string.Equals(targetFile, _stateFile, StringComparison.OrdinalIgnoreCase)) return;
         HideWebView();
+        if (string.Equals(targetFile, _stateFile, StringComparison.OrdinalIgnoreCase)) return;
         DiagnosticLog.Write($"STATE-SWITCH from={_stateFile} to={targetFile}");
         try { SaveState(); }
         catch (Exception ex)
