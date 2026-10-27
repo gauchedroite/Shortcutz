@@ -353,6 +353,24 @@ public partial class Form1
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Rename", null, (s, e) => RenameIcon(item, title, panel));
+        if (Directory.Exists(item.Path))
+        {
+            menu.Items.Add("Open in terminal", null, (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo("wt.exe")
+                    {
+                        UseShellExecute = true,
+                        ArgumentList = { "-d", item.Path }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "Could not open terminal", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            });
+        }
         if (File.Exists(item.Path))
         {
             menu.Items.Add("Open file location", null, (s, e) =>
