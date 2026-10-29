@@ -1,7 +1,7 @@
 namespace Shortcutz;
 
 // Serialization DTOs
-public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null, bool? Compact = null);
+public sealed record ItemState(string Path, int X, int Y, bool IsNote = false, string? Text = null, string? Label = null, int? Width = null, string? Color = null, bool? Compact = null, bool? IsImage = false, int? Height = null, int? ImageBaseWidth = null, int? ImageBaseHeight = null);
 public sealed record PageState(string Name, List<ItemState>? Items = null, float? Zoom = 1.0f, string? Type = "Board", string? Text = null, bool? CompactIcons = null, bool? Monospace = false, bool? MarkdownPreview = false);
 public sealed record TabState(string Name, List<PageState>? Pages = null,
     int? SelectedPageIndex = 0,
@@ -28,6 +28,22 @@ public sealed class IconItem(string path, int x, int y, string? label, string? c
     public string? Color = color;
     public bool Compact;
     public override ItemState ToState() => new(Path, X, Y, false, null, Label, null, Color, Compact);
+}
+
+public sealed class ImageItem(string path, int x, int y, int width, int height) : Item(x, y)
+{
+    public const int DefaultWidth = 400;
+    public const int DefaultHeight = 300;
+    public const int MaxScale = 5;
+    public const float MinScale = 0.1f;
+    public string Path = path;
+    public string? Label;
+    public bool Selected;
+    public int Width = width;
+    public int Height = height;
+    public int BaseWidth = width;
+    public int BaseHeight = height;
+    public override ItemState ToState() => new(Path, X, Y, Label: Label, Width: Width, IsImage: true, Height: Height, ImageBaseWidth: BaseWidth, ImageBaseHeight: BaseHeight);
 }
 
 public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth, string? color = null) : Item(x, y)

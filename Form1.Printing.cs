@@ -46,7 +46,7 @@ public partial class Form1
             float dpiY = Math.Min(printGraphics.DpiY, 300f);
             int width = Math.Max(1, (int)Math.Round(contentBounds.Width * dpiX / 100));
             int height = Math.Max(1, (int)Math.Round(contentBounds.Height * dpiY / 100));
-            markdownFont ??= new Font(TitleFont.FontFamily, TitleFont.Size * dpiY / 96f);
+            markdownFont ??= new Font(TitleFont.FontFamily, TitleFont.Size * page.Zoom * dpiY / 96f);
             var view = markdownView ??= new MarkdownTextView
             {
                 Font = markdownFont,
@@ -113,7 +113,7 @@ public partial class Form1
         {
             FormatFlags = StringFormatFlags.LineLimit | StringFormatFlags.MeasureTrailingSpaces
         };
-        var font = page.Monospace ? MonospaceFont : TitleFont;
+        using var font = CreateTextPageFont(page);
         var remaining = text[offset..];
         graphics.MeasureString(remaining, font,
             new SizeF(bounds.Width, bounds.Height), format,

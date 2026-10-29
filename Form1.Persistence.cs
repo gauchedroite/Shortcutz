@@ -62,7 +62,14 @@ public partial class Form1
                             {
                                 Item item = it.IsNote
                                     ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? legacyCompactIcons };
+                                    : it.IsImage == true
+                                        ? new ImageItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), Math.Clamp(it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth * ImageItem.MaxScale), Math.Clamp(it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight * ImageItem.MaxScale))
+                                        {
+                                            Label = it.Label,
+                                            BaseWidth = Math.Clamp(it.ImageBaseWidth ?? it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth),
+                                            BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight)
+                                        }
+                                        : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? legacyCompactIcons };
                                 page.Items.Add(item);
                             }
                             tab.Pages.Add(page);
@@ -75,7 +82,14 @@ public partial class Form1
                         {
                             Item item = it.IsNote
                                 ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
-                                : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? state.CompactIcons ?? false };
+                                : it.IsImage == true
+                                    ? new ImageItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), Math.Clamp(it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth * ImageItem.MaxScale), Math.Clamp(it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight * ImageItem.MaxScale))
+                                    {
+                                        Label = it.Label,
+                                        BaseWidth = Math.Clamp(it.ImageBaseWidth ?? it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth),
+                                        BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight)
+                                    }
+                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? state.CompactIcons ?? false };
                             page.Items.Add(item);
                         }
                         tab.Pages.Add(page);
@@ -105,7 +119,7 @@ public partial class Form1
             PopulateSubPage(SelectedSubPage);
 
             if (SelectedWorkspace() is Panel workspace)
-                ApplyZoom(workspace);
+                ApplyPageZoom(workspace);
 
             if (state.Window is not null && !_hasGlobalWindowState && _isInitialStateLoad)
                 ApplyWindowState(state.Window);

@@ -72,6 +72,7 @@ public partial class Form1
                         {
                             IconItem i => (i.Label ?? "") + "\n" + i.Path,
                             NoteItem n => n.Text,
+                            ImageItem i => (i.Label ?? "") + "\n" + i.Path,
                             _ => ""
                         };
                         if (!Matches(query, text)) continue;
@@ -79,6 +80,8 @@ public partial class Form1
                         // Show the path when the hit is in the path, not in the displayed name
                         if (item is IconItem icon && Matches(query, icon.Path) && !Matches(query, display))
                             display += $"  ({icon.Path})";
+                        if (item is ImageItem image && Matches(query, image.Path) && !Matches(query, display))
+                            display += $"  ({image.Path})";
                         AddMatch(tab, page, item, $"{tab.Name} > {page.Name} > {display}");
                     }
                 }

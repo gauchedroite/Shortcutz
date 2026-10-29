@@ -10,6 +10,7 @@ Built with .NET 10 Windows Forms.
 - State files. Buttons for all board JSON files in `%LocalAppData%\GaucheDroite\Shortcutz` appear at the top-right; click one to switch files. Choose a file elsewhere from the empty-board context menu.
 - Tabs and pages. Add, rename, delete, drag them to reorder, or right-click a page tab and choose **Move to** to place it under another tab.
 - Drag and drop. Add files, folders, and URLs to a board. URLs show their page title and favicon when available.
+- Clipboard images. Press `Ctrl+V` on a board or use its context menu to paste an image. Double-click it to edit its search label. Shortcutz stores pasted copies in `%LocalAppData%\GaucheDroite\Shortcutz\images`.
 - Outlook messages. Drop one or more messages onto a board. Shortcutz saves each message as a `.msg` file in `%LocalAppData%\GaucheDroite\Shortcutz\outlook`. The state file stores only the path to each saved message.
 - Notes. Double-click an empty part of a board to add a note. Drag notes to move them. Use the grip to change their width. Double-click a note to edit it. Press `Shift+Enter` to add a line break while editing.
 - Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [Markdown in Shortcutz](#markdown-in-shortcutz) for supported syntax and limits.
@@ -67,11 +68,11 @@ This is not a full CommonMark parser. Nested bullet lists support one level only
 | Rename a tab or page | Double-click its tab |
 | Add a note | Double-click an empty part of a board |
 | Edit a note | Double-click the note |
-| Copy, cut, or paste selected items | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` |
+| Copy, cut, or paste board items; paste a clipboard image | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` |
 | Remove selected items from the board | `Delete` |
 | Toggle compact layout | `Ctrl+M` |
-| Zoom in or out | `Ctrl` + `+` / `Ctrl` + `-` |
-| Reset zoom | `Ctrl` + `0` |
+| Zoom board/text-page font, or resize selected images | `Ctrl` + `+` / `Ctrl` + `-` |
+| Reset board/text zoom or selected image size | `Ctrl` + `0` |
 | Move through tab and page history | `Ctrl` + `Left` / `Ctrl` + `Right` |
 | Reload state from disk | `Ctrl+R` |
 | Toggle Markdown preview on a text page | `F5` |

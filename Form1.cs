@@ -105,7 +105,7 @@ public partial class Form1 : Form
             var page = PageFromSubPage(subPage);
             page.Monospace = monospaceItem.Checked;
             if (WorkspaceFromSubPage(subPage).Controls.OfType<TextBox>().FirstOrDefault() is TextBox box)
-                box.Font = page.Monospace ? MonospaceFont : TitleFont;
+                ReplaceFont(box, CreateTextPageFont(page));
             _board.Dirty();
         };
         _subTabMenu.Items.Add(monospaceItem);
@@ -139,7 +139,11 @@ public partial class Form1 : Form
                 workspace.Invalidate();
         };
         _workspaceMenu.Items.Add(showGridItem);
-        _workspaceMenu.Items.Add("Paste", null, (s, e) => PasteItems(_lastWorkspaceMenuLocation));
+        _workspaceMenu.Items.Add("Paste", null, (s, e) =>
+        {
+            if (!PasteClipboardImage(_lastWorkspaceMenuLocation))
+                PasteItems(_lastWorkspaceMenuLocation);
+        });
         _workspaceMenu.Items.Add(new ToolStripSeparator());
         var schedulerMenu = new ToolStripMenuItem("Scheduler");
         schedulerMenu.DropDownItems.Add("Open scheduler (F12)", null, (s, e) => ShowWebView(SchedulerApi + "/"));
@@ -198,7 +202,7 @@ public partial class Form1 : Form
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
-            ApplyZoom(workspace);
+            ApplyPageZoom(workspace);
     }
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
@@ -252,6 +256,31 @@ public partial class Form1 : Form
             e.SuppressKeyPress = true;
             ToggleMarkdownPreview();
             return;
+        }
+        if (TryResizeSelectedImages(e)) return;
+        if (e.Control && SelectedSubPage is TabPage zoomPage && PageFromSubPage(zoomPage).Type == "Text")
+        {
+            if (e.KeyCode is Keys.Oemplus or Keys.Add)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                ZoomIn();
+                return;
+            }
+            if (e.KeyCode is Keys.OemMinus or Keys.Subtract)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                ZoomOut();
+                return;
+            }
+            if (e.KeyCode is Keys.D0 or Keys.NumPad0)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                ResetZoom();
+                return;
+            }
         }
         if (e.Control && e.KeyCode == Keys.M)
         {
@@ -364,7 +393,8 @@ public partial class Form1 : Form
             if (e.KeyCode == Keys.V)
             {
                 e.Handled = true;
-                PasteItems();
+                e.SuppressKeyPress = true;
+                if (!PasteClipboardImage()) PasteItems();
                 return;
             }
             if (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add)
@@ -667,7 +697,7 @@ public partial class Form1 : Form
             var markdown = new MarkdownTextView
             {
                 Location = new Point(12, 12),
-                Font = TitleFont,
+                Font = CreateTextPageFont(page),
                 ForeColor = SystemColors.WindowText,
                 Markdown = page.Text
             };
@@ -703,7 +733,7 @@ public partial class Form1 : Form
             AcceptsReturn = true,
             WordWrap = true,
             ScrollBars = ScrollBars.Vertical,
-            Font = page.Monospace ? MonospaceFont : TitleFont,
+            Font = CreateTextPageFont(page),
             Text = page.Text
         };
         box.TextChanged += (s, e) => page.Text = box.Text;
@@ -739,7 +769,7 @@ public partial class Form1 : Form
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
-            ApplyZoom(workspace);
+            ApplyPageZoom(workspace);
     }
 
     private static TabControl SubTabsFromPage(TabPage page) => (TabControl)page.Controls[0];

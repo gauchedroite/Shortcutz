@@ -22,6 +22,9 @@ public partial class Form1
             case NoteItem ni:
                 CreateNoteView(workspace, ni);
                 break;
+            case ImageItem image:
+                CreateImageView(workspace, image);
+                break;
         }
     }
 
@@ -149,7 +152,7 @@ public partial class Form1
         if (Math.Abs(z - _zoom) < 0.001f) return;
         _zoom = z;
         if (SelectedWorkspace() is Panel workspace)
-            ApplyZoom(workspace);
+            ApplyPageZoom(workspace);
     }
 
     private void ZoomOut()
@@ -158,7 +161,7 @@ public partial class Form1
         if (Math.Abs(z - _zoom) < 0.001f) return;
         _zoom = z;
         if (SelectedWorkspace() is Panel workspace)
-            ApplyZoom(workspace);
+            ApplyPageZoom(workspace);
     }
 
     private void ResetZoom()
@@ -166,7 +169,28 @@ public partial class Form1
         if (_zoom == 1f) return;
         _zoom = 1f;
         if (SelectedWorkspace() is Panel workspace)
+            ApplyPageZoom(workspace);
+    }
+
+    private void ApplyPageZoom(Panel workspace)
+    {
+        var page = PageFromWorkspace(workspace);
+        if (page.Type != "Text")
+        {
             ApplyZoom(workspace);
+            return;
+        }
+
+        if (workspace.Controls.OfType<TextBox>().FirstOrDefault() is TextBox editor)
+            ReplaceFont(editor, CreateTextPageFont(page));
+        else if (workspace.Controls.OfType<Panel>()
+                     .SelectMany(panel => panel.Controls.OfType<MarkdownTextView>())
+                     .FirstOrDefault() is MarkdownTextView markdown)
+        {
+            ReplaceFont(markdown, CreateTextPageFont(page));
+            if (markdown.Parent is Panel preview)
+                ResizeMarkdownPreview(preview, markdown);
+        }
     }
 
     private void ApplyZoom(Panel workspace)
@@ -186,7 +210,48 @@ public partial class Form1
             case NoteItem noteItem:
                 ScaleNoteView((Label)c, noteItem);
                 break;
+            case ImageItem imageItem:
+                var view = (PictureBox)c;
+                view.Location = new Point((int)(imageItem.X * _zoom), (int)(imageItem.Y * _zoom));
+                view.Size = new Size(Math.Max(1, (int)(imageItem.Width * _zoom)), Math.Max(1, (int)(imageItem.Height * _zoom)));
+                break;
         }
+    }
+
+    private bool TryResizeSelectedImages(KeyEventArgs e)
+    {
+        if (!e.Control || ActiveControl is TextBox) return false;
+        int direction = e.KeyCode switch
+        {
+            Keys.Oemplus or Keys.Add => 1,
+            Keys.OemMinus or Keys.Subtract => -1,
+            Keys.D0 or Keys.NumPad0 => 0,
+            _ => int.MinValue
+        };
+        if (direction == int.MinValue || SelectedWorkspace() is not Panel workspace) return false;
+        var images = workspace.Controls.OfType<PictureBox>().Where(IsSelected).ToList();
+        if (images.Count == 0) return false;
+
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        bool changed = false;
+        foreach (var view in images)
+        {
+            var image = (ImageItem)view.Tag!;
+            float scale = direction == 0 ? 1f : Math.Clamp(
+                (float)image.Width / image.BaseWidth * (direction > 0 ? 1.15f : 1f / 1.15f),
+                ImageItem.MinScale, ImageItem.MaxScale);
+            int width = Math.Max(1, (int)Math.Round(image.BaseWidth * scale));
+            int height = Math.Max(1, (int)Math.Round(image.BaseHeight * scale));
+            Debug.Assert(width > 0 && height > 0);
+            if (image.Width == width && image.Height == height) continue;
+            image.Width = width;
+            image.Height = height;
+            ApplyZoomToControl(view);
+            changed = true;
+        }
+        if (changed) _board.Dirty();
+        return true;
     }
 
     private void ScaleIconView(Panel panel, IconItem item)
@@ -250,12 +315,16 @@ public partial class Form1
         note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
     }
 
+    private static Font CreateTextPageFont(Page page) => new(
+        page.Monospace ? MonospaceFont.FontFamily : TitleFont.FontFamily,
+        (page.Monospace ? MonospaceFont.Size : TitleFont.Size) * page.Zoom);
+
     private static void ReplaceFont(Control c, Font font)
     {
         var old = c.Font;
         if (old.Equals(font)) { font.Dispose(); return; }
         c.Font = font;
-        if (!ReferenceEquals(old, TitleFont)) old.Dispose();
+        if (!ReferenceEquals(old, TitleFont) && !ReferenceEquals(old, MonospaceFont)) old.Dispose();
     }
 
     private static Bitmap ScaleBitmap(Image source, Size fit)
@@ -619,6 +688,7 @@ public partial class Form1
     {
         IconItem i => new IconItem(i.Path, i.X, i.Y, i.Label, i.Color) { Compact = i.Compact },
         NoteItem n => new NoteItem(n.Text, n.X, n.Y, n.Width, n.Color),
+        ImageItem i => new ImageItem(i.Path, i.X, i.Y, i.Width, i.Height) { Label = i.Label, BaseWidth = i.BaseWidth, BaseHeight = i.BaseHeight },
         _ => throw new NotSupportedException()
     };
 
@@ -673,6 +743,171 @@ public partial class Form1
             else
                 CreateView(workspace, copy);
         }
+        _board.Dirty();
+    }
+
+    private bool PasteClipboardImage(Point? pasteAt = null)
+    {
+        if (SelectedWorkspace() is not Panel workspace || PageFromWorkspace(workspace).Type == "Text") return false;
+
+        string? path = null;
+        var page = PageFromWorkspace(workspace);
+        try
+        {
+            if (!Clipboard.ContainsImage()) return false;
+            using var clipboardImage = Clipboard.GetImage();
+            if (clipboardImage is null) return false;
+            using var image = new Bitmap(clipboardImage);
+
+            float scale = Math.Min(1f, Math.Min(
+                (float)ImageItem.DefaultWidth / image.Width,
+                (float)ImageItem.DefaultHeight / image.Height));
+            int width = Math.Max(1, (int)Math.Round(image.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(image.Height * scale));
+            Debug.Assert(width <= ImageItem.DefaultWidth && height <= ImageItem.DefaultHeight);
+            var directory = Path.Combine(_stateDirectory, "images");
+            Directory.CreateDirectory(directory);
+            path = Path.Combine(directory, $"clipboard-{Guid.NewGuid():N}.png");
+            image.Save(path, ImageFormat.Png);
+
+            var size = new Size(Math.Max(1, (int)(width * _zoom)), Math.Max(1, (int)(height * _zoom)));
+            var location = SnapToGrid(workspace, size,
+                pasteAt ?? new Point(workspace.ClientSize.Width / 2, workspace.ClientSize.Height / 2));
+            var item = new ImageItem(path, (int)(location.X / _zoom), (int)(location.Y / _zoom), width, height);
+            page.Items.Add(item);
+            try { CreateImageView(workspace, item); }
+            catch { page.Items.Remove(item); throw; }
+            _board.Dirty();
+        }
+        catch (Exception ex)
+        {
+            if (path is not null)
+                try { File.Delete(path); } catch { }
+            DiagnosticLog.WriteException("Pasting clipboard image", ex);
+            MessageBox.Show(this, $"Could not paste the clipboard image.\\n\\n{ex.Message}",
+                "Paste failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        return true;
+    }
+
+    private sealed class ImagePictureBox : PictureBox
+    {
+        public ImagePictureBox() => SetStyle(ControlStyles.StandardDoubleClick, true);
+    }
+
+    private void CreateImageView(Panel workspace, ImageItem item)
+    {
+        Bitmap? bitmap = null;
+        try
+        {
+            using var source = Image.FromFile(item.Path);
+            bitmap = new Bitmap(source);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.WriteException($"Loading board image {item.Path}", ex);
+        }
+
+        var view = new ImagePictureBox
+        {
+            Size = new Size(item.Width, item.Height),
+            Location = new Point(item.X, item.Y),
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            Cursor = Cursors.Hand,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Image = bitmap,
+            Tag = item
+        };
+        view.Paint += (_, e) =>
+        {
+            var bounds = view.ClientRectangle;
+            bounds.Inflate(-1, -1);
+            if (bounds.Width <= 0 || bounds.Height <= 0) return;
+            if (bitmap is null)
+            {
+                using var pen = new Pen(Color.Red, 2);
+                e.Graphics.DrawRectangle(pen, bounds);
+            }
+            if (IsSelected(view))
+            {
+                using var pen = new Pen(Color.Black, 2);
+                e.Graphics.DrawRectangle(pen, bounds);
+            }
+        };
+
+        List<(Control c, Item i, Point s, Label g)>? dragGroup = null;
+        view.MouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left && (Control.ModifierKeys & Keys.Control) == 0 && !IsSelected(view))
+                SelectSingle(workspace, view);
+        };
+        WireDrag(new Control[] { view },
+            onDragStart: () =>
+            {
+                if (!IsSelected(view)) SelectSingle(workspace, view);
+                dragGroup = workspace.Controls.OfType<Control>()
+                    .Where(IsSelected)
+                    .Select(c =>
+                    {
+                        var ghost = CreateDragGhost(c);
+                        ghost.Location = c.Location;
+                        workspace.Controls.Add(ghost);
+                        ghost.BringToFront();
+                        c.SendToBack();
+                        return (c, (Item)c.Tag!, c.Location, ghost);
+                    })
+                    .ToList();
+            },
+            onDrag: (dx, dy) =>
+            {
+                if (dragGroup is null) return;
+                foreach (var (_, _, start, ghost) in dragGroup)
+                    ghost.Location = Clamp(workspace, ghost.Size, new Point(start.X + dx, start.Y + dy));
+            },
+            onClick: () =>
+            {
+                if ((Control.ModifierKeys & Keys.Control) != 0) Toggle(view);
+                else SelectSingle(workspace, view);
+            },
+            onDragEnd: () =>
+            {
+                if (dragGroup is null) return;
+                foreach (var (control, dragged, _, ghost) in dragGroup)
+                {
+                    control.Location = SnapToGrid(workspace, control.Size, ghost.Location);
+                    dragged.X = (int)(control.Left / _zoom);
+                    dragged.Y = (int)(control.Top / _zoom);
+                    control.BringToFront();
+                    DisposeDragGhost(ghost, workspace);
+                }
+                dragGroup = null;
+                _board.Dirty();
+            },
+            onDragCancel: () =>
+            {
+                ClearDragGhosts(workspace);
+                dragGroup = null;
+            });
+
+        view.MouseDoubleClick += (_, _) => EditImageLabel(item);
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Copy", null, (_, _) => CopySelectedItems(workspace, view));
+        menu.Items.Add("Delete", null, (_, _) =>
+        {
+            if (!IsSelected(view)) SelectSingle(workspace, view);
+            DeleteSelectedItems(workspace);
+        });
+        view.ContextMenuStrip = menu;
+        workspace.Controls.Add(view);
+        ApplyZoomToControl(view);
+    }
+
+    private void EditImageLabel(ImageItem item)
+    {
+        var label = Prompt("Edit image label", "Search label:", item.Label ?? "");
+        if (label is null) return;
+        item.Label = string.IsNullOrWhiteSpace(label) ? null : label;
         _board.Dirty();
     }
 
@@ -869,6 +1104,11 @@ public partial class Form1
 
     private static void DisposeItemControl(Control c)
     {
+        if (c is PictureBox image && image.Image is not null)
+        {
+            image.Image.Dispose();
+            image.Image = null;
+        }
         if (c is Panel p)
             foreach (var child in p.Controls)
                 if (child is Label l && l.Image is not null)

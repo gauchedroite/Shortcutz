@@ -43,12 +43,13 @@ public partial class Form1
     }
 
     private static bool IsSelectable(Control c) =>
-        (c is Panel && c.Tag is IconItem) || (c is Label && c.Tag is NoteItem);
+        (c is Panel && c.Tag is IconItem) || (c is Label && c.Tag is NoteItem) || (c is PictureBox && c.Tag is ImageItem);
 
     private static bool IsSelected(Control c) => c switch
     {
         Panel p when p.Tag is IconItem icon => p.BackColor != IconBaseColor(icon),
         Label note when note.Tag is NoteItem item => note.BackColor != NoteBaseColor(item),
+        PictureBox image when image.Tag is ImageItem item => item.Selected,
         _ => false
     };
 
@@ -68,16 +69,27 @@ public partial class Form1
             note.BackColor = selected ? NoteSelectionBackColor : NoteBaseColor((NoteItem)note.Tag!);
             note.Invalidate(true);
         }
+        else if (c is PictureBox image && image.Tag is ImageItem item)
+        {
+            item.Selected = selected;
+            image.Invalidate();
+        }
     }
 
     private static string GetItemDisplayName(Item item) => item switch
     {
         IconItem i => i.Label ?? Path.GetFileName(i.Path) ?? i.Path,
         NoteItem n => n.Text,
+        ImageItem image => image.Label ?? "Clipboard image",
         _ => ""
     };
 
-    private static string? GetItemPath(Item item) => item is IconItem i ? i.Path : null;
+    private static string? GetItemPath(Item item) => item switch
+    {
+        IconItem i => i.Path,
+        ImageItem i => i.Path,
+        _ => null
+    };
 
     private static string? ExtractUrlTitle(IDataObject data, string url)
     {
