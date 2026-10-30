@@ -10,7 +10,7 @@ public sealed class PromptForm : Form
     public PromptForm(string title, string label, string initial, bool multiline = false)
     {
         Text = title;
-        ClientSize = new Size(360, multiline ? 300 : 150);
+        ClientSize = new Size(multiline ? 700 : 360, multiline ? 500 : 150);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -20,13 +20,14 @@ public sealed class PromptForm : Form
         _box = new TextBox
         {
             Location = new Point(12, 35),
-            Size = new Size(336, multiline ? 220 : 80),
+            Size = new Size(multiline ? 676 : 336, multiline ? 420 : 80),
             Multiline = true,
+            ScrollBars = multiline ? ScrollBars.Vertical : ScrollBars.None,
             Text = initial
         };
         if (multiline) _box.Font = MonospaceFont;
-        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(196, multiline ? 268 : 118), Size = new Size(75, 23) };
-        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(277, multiline ? 268 : 118), Size = new Size(75, 23) };
+        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(multiline ? 536 : 196, multiline ? 468 : 118), Size = new Size(75, 23) };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(multiline ? 617 : 277, multiline ? 468 : 118), Size = new Size(75, 23) };
 
         Controls.AddRange(lbl, _box, ok, cancel);
         CancelButton = cancel;

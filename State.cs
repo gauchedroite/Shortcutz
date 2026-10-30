@@ -48,7 +48,7 @@ public sealed class ImageItem(string path, int x, int y, int width, int height) 
 
 public sealed class NoteItem(string text, int x, int y, int width = NoteItem.DefaultWidth, string? color = null) : Item(x, y)
 {
-    public const int DefaultWidth = 160;
+    public const int DefaultWidth = 240;
     public const int MinWidth = 40;
     public const int MaxWidth = 600;
     public string Text = text;

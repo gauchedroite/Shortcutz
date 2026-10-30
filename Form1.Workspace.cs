@@ -697,7 +697,7 @@ public partial class Form1
         if (workspace.GetChildAtPoint(e.Location) != null) return;
         var text = Prompt("New note", "Enter note text:", "", multiline: true);
         if (string.IsNullOrWhiteSpace(text)) return;
-        var loc = Clamp(workspace, new Size(120, 40), e.Location);
+        var loc = Clamp(workspace, new Size((int)(NoteItem.DefaultWidth * _zoom), (int)(40 * _zoom)), e.Location);
         var item = new NoteItem(text, (int)(loc.X / _zoom), (int)(loc.Y / _zoom));
         PageFromWorkspace(workspace).Items.Add(item);
         CreateNoteView(workspace, item);
