@@ -601,12 +601,14 @@ public partial class Form1
 
     private void UpdateIconLabel(IconItem item, Label title, Panel panel, string newLabel)
     {
+        if (newLabel != item.Label) item.TextUpdatedAt = StateTimestamp.UtcNow;
         item.Label = newLabel;
         title.Tag = newLabel;
         ApplyZoomToControl(panel);
         var workspace = (Panel)panel.Parent!;
         if (item.Compact)
             PlaceCompactIconInList(workspace, panel);
+        UpdateItemStatus(workspace);
         title.Invalidate();
     }
 
@@ -621,10 +623,12 @@ public partial class Form1
     private void RenameNote(NoteItem item, Label note)
     {
         var newText = Prompt("Edit note", "Edit note:", item.Text, multiline: true);
-        if (string.IsNullOrWhiteSpace(newText)) return;
+        if (string.IsNullOrWhiteSpace(newText) || newText == item.Text) return;
         item.Text = newText;
+        item.TextUpdatedAt = StateTimestamp.UtcNow;
         note.Controls.OfType<MarkdownTextView>().First().Markdown = newText;
         ScaleNoteView(note, item);
+        if (note.Parent is Panel workspace) UpdateItemStatus(workspace);
         _board.Dirty();
     }
 
@@ -652,6 +656,7 @@ public partial class Form1
         PageFromWorkspace(workspace).Items.Remove(item);
         DisposeItemControl(panel);
         DeleteFaviconCache(item.Path);
+        UpdateItemStatus(workspace);
         _board.Dirty();
     }
 
@@ -665,10 +670,19 @@ public partial class Form1
             : $"Remove {selected.Count} selected items from the board?";
         var iconPaths = selected
             .Where(c => c.Tag is IconItem)
-            .Select(c => ((IconItem)c.Tag!).Path);
-        var detail = iconPaths.All(ItemExists)
-            ? "\n\nThe original files/folders will not be affected."
-            : "";
+            .Select(c => ((IconItem)c.Tag!).Path)
+            .ToList();
+        var imagePaths = selected
+            .Where(c => c.Tag is ImageItem)
+            .Select(c => ((ImageItem)c.Tag!).Path)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var details = new List<string>();
+        if (iconPaths.Count > 0 && iconPaths.All(ItemExists))
+            details.Add("The original files/folders will not be affected.");
+        if (imagePaths.Count > 0)
+            details.Add("Unused pasted images stored by Shortcutz will be deleted.");
+        var detail = details.Count == 0 ? "" : "\n\n" + string.Join("\n", details);
         if (MessageBox.Show(message + detail, "Remove?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
@@ -681,6 +695,9 @@ public partial class Form1
                 DeleteFaviconCache(iconItem.Path);
             DisposeItemControl(c);
         }
+        foreach (var path in imagePaths)
+            DeleteStoredImageIfUnused(path);
+        UpdateItemStatus(workspace);
         _board.Dirty();
     }
 
@@ -698,8 +715,31 @@ public partial class Form1
         if (selected.Count == 0 && source is not null && IsSelectable(source))
             selected.Add(source);
         if (selected.Count == 0) return;
+        var oldImagePaths = _clipboard.OfType<ImageItem>().Select(i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _clipboard.Clear();
         _clipboard.AddRange(selected.Select(c => CloneItem((Item)c.Tag!)));
+        foreach (var path in oldImagePaths)
+            DeleteStoredImageIfUnused(path);
+    }
+
+    private void DeleteStoredImageIfUnused(string path)
+    {
+        if (_board.Tabs.SelectMany(t => t.Pages).SelectMany(p => p.Items).OfType<ImageItem>()
+                .Any(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase))
+            || _clipboard.OfType<ImageItem>().Any(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var imagesDirectory = Path.GetFullPath(Path.Combine(_stateDirectory, "images")) + Path.DirectorySeparatorChar;
+            if (fullPath.StartsWith(imagesDirectory, StringComparison.OrdinalIgnoreCase))
+                File.Delete(fullPath);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.WriteException($"Deleting board image {path}", ex);
+        }
     }
 
     private void CutSelectedItems(Panel workspace)
@@ -716,6 +756,7 @@ public partial class Form1
                 DeleteFaviconCache(iconItem.Path);
             DisposeItemControl(c);
         }
+        UpdateItemStatus(workspace);
         _board.Dirty();
     }
 
@@ -907,7 +948,11 @@ public partial class Form1
     {
         var label = Prompt("Edit image label", "Search label:", item.Label ?? "");
         if (label is null) return;
-        item.Label = string.IsNullOrWhiteSpace(label) ? null : label;
+        var newLabel = string.IsNullOrWhiteSpace(label) ? null : label;
+        if (newLabel == item.Label) return;
+        item.Label = newLabel;
+        item.TextUpdatedAt = StateTimestamp.UtcNow;
+        if (SelectedWorkspace() is Panel workspace) UpdateItemStatus(workspace);
         _board.Dirty();
     }
 

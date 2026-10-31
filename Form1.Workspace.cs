@@ -667,28 +667,33 @@ public partial class Form1
         return new Rectangle(x, y, Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
     }
 
-    private static void SelectItems(Panel workspace, Rectangle rect)
+    private void SelectItems(Panel workspace, Rectangle rect)
     {
         foreach (var c in workspace.Controls.OfType<Control>().Where(IsSelectable))
             if (rect.IntersectsWith(c.Bounds))
                 SetSelected(c, true);
+        UpdateItemStatus(workspace);
     }
 
-    private static void ClearHighlights(Panel workspace)
+    private void ClearHighlights(Panel workspace)
     {
         foreach (var c in workspace.Controls.OfType<Control>().Where(IsSelectable))
             SetSelected(c, false);
+        UpdateItemStatus(workspace);
     }
 
-    private static void SelectSingle(Panel workspace, Control c)
+    private void SelectSingle(Panel workspace, Control c)
     {
         ClearHighlights(workspace);
         SetSelected(c, true);
+        UpdateItemStatus(workspace);
     }
 
-    private static void Toggle(Control c)
+    private void Toggle(Control c)
     {
         SetSelected(c, !IsSelected(c));
+        if (c.Parent is Panel workspace)
+            UpdateItemStatus(workspace);
     }
 
     private void Workspace_MouseDoubleClick(object? sender, MouseEventArgs e)

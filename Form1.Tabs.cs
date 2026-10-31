@@ -149,14 +149,21 @@ public partial class Form1
             _ => tc.SelectedTab.Text
         };
         var name = Prompt("Rename", "Name:", currentName);
-        if (string.IsNullOrWhiteSpace(name)) return;
+        if (string.IsNullOrWhiteSpace(name) || name == currentName) return;
         switch (model)
         {
-            case Tab tab: tab.Name = name; break;
-            case Page page: page.Name = name; break;
+            case Tab tab:
+                tab.Name = name;
+                tab.TextUpdatedAt = StateTimestamp.UtcNow;
+                break;
+            case Page page:
+                page.Name = name;
+                page.TextUpdatedAt = StateTimestamp.UtcNow;
+                break;
         }
         tc.SelectedTab.Text = name;
         UpdateWindowTitle();
+        if (model is Page && SelectedWorkspace() is Panel workspace) UpdateItemStatus(workspace);
         _board.Dirty();
     }
 

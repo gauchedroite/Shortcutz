@@ -41,6 +41,7 @@ public partial class Form1
             _webView.BringToFront();
         }
         _webView.Visible = true;
+        statusStrip.Visible = false;
         // Page autofocus only works if the WebView2 itself has keyboard focus.
         _webView.Focus();
         // Navigate only when the view is fresh or a different URL was asked for,
@@ -53,5 +54,6 @@ public partial class Form1
     private void HideWebView()
     {
         if (_webView is not null) _webView.Visible = false;
+        statusStrip.Visible = true;
     }
 }

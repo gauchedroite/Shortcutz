@@ -51,25 +51,27 @@ public partial class Form1
             {
                 foreach (var t in state.Tabs ?? new List<TabState>())
                 {
-                    var tab = new Tab(t.Name);
+                    var tab = new Tab(t.Name) { CreatedAt = t.CreatedAt, TextUpdatedAt = t.TextUpdatedAt };
                     if (t.Pages is { Count: > 0 })
                     {
                         foreach (var p in t.Pages)
                         {
                             var legacyCompactIcons = p.CompactIcons ?? state.CompactIcons ?? false;
-                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "", Monospace = p.Monospace ?? false, MarkdownPreview = p.MarkdownPreview ?? false };
+                            var page = new Page(p.Name) { Zoom = p.Zoom ?? 1.0f, Type = p.Type ?? "Board", Text = p.Text ?? "", Monospace = p.Monospace ?? false, MarkdownPreview = p.MarkdownPreview ?? false, CreatedAt = p.CreatedAt, TextUpdatedAt = p.TextUpdatedAt, TextAtLastUpdate = p.Text ?? "" };
                             foreach (var it in p.Items ?? new List<ItemState>())
                             {
                                 Item item = it.IsNote
-                                    ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
+                                    ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color) { CreatedAt = it.CreatedAt, TextUpdatedAt = it.TextUpdatedAt }
                                     : it.IsImage == true
                                         ? new ImageItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), Math.Clamp(it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth * ImageItem.MaxScale), Math.Clamp(it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight * ImageItem.MaxScale))
                                         {
                                             Label = it.Label,
                                             BaseWidth = Math.Clamp(it.ImageBaseWidth ?? it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth),
-                                            BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight)
+                                            BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight),
+                                            CreatedAt = it.CreatedAt,
+                                            TextUpdatedAt = it.TextUpdatedAt
                                         }
-                                        : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? legacyCompactIcons };
+                                        : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? legacyCompactIcons, CreatedAt = it.CreatedAt, TextUpdatedAt = it.TextUpdatedAt };
                                 page.Items.Add(item);
                             }
                             tab.Pages.Add(page);
@@ -77,19 +79,21 @@ public partial class Form1
                     }
                     else if (t.LegacyItems is { Count: > 0 })
                     {
-                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f, Type = "Board", Text = "" };
+                        var page = new Page(t.Name) { Zoom = t.LegacyZoom ?? 1.0f, Type = "Board", Text = "", CreatedAt = null, TextUpdatedAt = null };
                         foreach (var it in t.LegacyItems)
                         {
                             Item item = it.IsNote
-                                ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color)
+                                ? new NoteItem(it.Text ?? "", Math.Max(0, it.X), Math.Max(0, it.Y), it.Width ?? NoteItem.DefaultWidth, it.Color) { CreatedAt = it.CreatedAt, TextUpdatedAt = it.TextUpdatedAt }
                                 : it.IsImage == true
                                     ? new ImageItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), Math.Clamp(it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth * ImageItem.MaxScale), Math.Clamp(it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight * ImageItem.MaxScale))
                                     {
                                         Label = it.Label,
                                         BaseWidth = Math.Clamp(it.ImageBaseWidth ?? it.Width ?? ImageItem.DefaultWidth, 1, ImageItem.DefaultWidth),
-                                        BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight)
+                                        BaseHeight = Math.Clamp(it.ImageBaseHeight ?? it.Height ?? ImageItem.DefaultHeight, 1, ImageItem.DefaultHeight),
+                                        CreatedAt = it.CreatedAt,
+                                        TextUpdatedAt = it.TextUpdatedAt
                                     }
-                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? state.CompactIcons ?? false };
+                                    : new IconItem(it.Path, Math.Max(0, it.X), Math.Max(0, it.Y), it.Label, it.Color) { Compact = it.Compact ?? state.CompactIcons ?? false, CreatedAt = it.CreatedAt, TextUpdatedAt = it.TextUpdatedAt };
                             page.Items.Add(item);
                         }
                         tab.Pages.Add(page);
@@ -282,6 +286,8 @@ public partial class Form1
 
     private void SaveState()
     {
+        foreach (var page in _board.Tabs.SelectMany(t => t.Pages).Where(p => p.Type == "Text"))
+            CommitTextPageUpdate(page);
         _board.SelectedIndex = tabs.SelectedIndex;
         _board.ShowGridDots = _showGridDots;
         for (int i = 0; i < _board.Tabs.Count && i < tabs.TabPages.Count; i++)

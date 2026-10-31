@@ -31,6 +31,9 @@ public partial class Form1 : Form
     private readonly ContextMenuStrip _subTabMenu;
     private readonly ContextMenuStrip _workspaceMenu;
     private readonly ToolStrip stateStrip;
+    private readonly StatusStrip statusStrip;
+    private readonly ToolStripStatusLabel itemDateStatus;
+    private Item? _statusItem;
     private Stack<(int Top, int Sub)> _tabHistoryBack = new();
     private Stack<(int Top, int Sub)> _tabHistoryForward = new();
     private readonly Dictionary<string, (Stack<(int Top, int Sub)> Back, Stack<(int Top, int Sub)> Forward)> _tabHistoryByStateFile = new(StringComparer.OrdinalIgnoreCase);
@@ -66,11 +69,16 @@ public partial class Form1 : Form
     public Form1()
     {
         stateStrip = new ToolStrip { Dock = DockStyle.Top, GripStyle = ToolStripGripStyle.Hidden };
+        statusStrip = new StatusStrip { Dock = DockStyle.Bottom, SizingGrip = false };
+        itemDateStatus = new ToolStripStatusLabel("Modified: —") { DoubleClickEnabled = true };
+        itemDateStatus.DoubleClick += ItemDateStatus_DoubleClick;
+        statusStrip.Items.Add(itemDateStatus);
         tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
         tabs.DrawItem += Tabs_DrawItem;
         SuspendLayout();
         Controls.Add(tabs);
         Controls.Add(stateStrip);
+        Controls.Add(statusStrip);
         InitSearch();
         ClientSize = new Size(1000, 650);
         MinimumSize = new Size(400, 300);
@@ -186,6 +194,8 @@ public partial class Form1 : Form
         showGridItem.Checked = _showGridDots;
         if (tabs.TabPages.Count == 0)
             AddTab("Board");
+        if (SelectedWorkspace() is Panel workspace)
+            UpdateItemStatus(workspace);
 
         _currentTabPair = GetCurrentTabPair();
         _tabPairInitialized = true;
@@ -202,7 +212,10 @@ public partial class Form1 : Form
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
+        {
             ApplyPageZoom(workspace);
+            UpdateItemStatus(workspace);
+        }
     }
 
     private void Form1_KeyDown(object? sender, KeyEventArgs e)
@@ -560,6 +573,7 @@ public partial class Form1 : Form
         }
         if (!string.IsNullOrWhiteSpace(newName))
         {
+            if (newName != tab.Name) tab.TextUpdatedAt = StateTimestamp.UtcNow;
             tab.Name = newName;
             tabPage.Text = newName;
             UpdateWindowTitle();
@@ -598,6 +612,7 @@ public partial class Form1 : Form
         }
         if (!string.IsNullOrWhiteSpace(newName))
         {
+            if (newName != page.Name) page.TextUpdatedAt = StateTimestamp.UtcNow;
             page.Name = newName;
             subPage.Text = newName;
         }
@@ -609,8 +624,12 @@ public partial class Form1 : Form
         var page = AddPage(name, index);
         if (page is null) return null;
         page.Type = "Text";
+        page.TextUpdatedAt = StateTimestamp.UtcNow;
         if (SelectedWorkspace() is Panel workspace)
+        {
             UpdateTextPageView(workspace, page);
+            UpdateItemStatus(workspace);
+        }
         return page;
     }
 
@@ -737,6 +756,12 @@ public partial class Form1 : Form
             Text = page.Text
         };
         box.TextChanged += (s, e) => page.Text = box.Text;
+        box.Leave += (s, e) =>
+        {
+            CommitTextPageUpdate(page);
+            if (ReferenceEquals(SelectedWorkspace(), workspace))
+                UpdateItemStatus(workspace);
+        };
         workspace.Controls.Add(box);
         return box;
     }
@@ -769,8 +794,50 @@ public partial class Form1 : Form
         RecordTabPair();
         PopulateSubPage(SelectedSubPage);
         if (SelectedWorkspace() is Panel workspace)
+        {
             ApplyPageZoom(workspace);
+            UpdateItemStatus(workspace);
+        }
     }
+
+    private static void CommitTextPageUpdate(Page page)
+    {
+        if (page.Type != "Text" || page.Text == page.TextAtLastUpdate) return;
+        page.TextUpdatedAt = StateTimestamp.UtcNow;
+        page.TextAtLastUpdate = page.Text;
+    }
+
+    private void UpdateItemStatus(Panel workspace)
+    {
+        var page = PageFromWorkspace(workspace);
+        var selectedItem = workspace.Controls.OfType<Control>().FirstOrDefault(IsSelected)?.Tag as Item;
+        DateTimeOffset? modifiedAt;
+        if (page.Type == "Text")
+        {
+            _statusItem = null;
+            modifiedAt = page.TextUpdatedAt ?? page.CreatedAt;
+        }
+        else
+        {
+            _statusItem = selectedItem ?? page.Items
+                .Where(item => ItemModifiedAt(item).HasValue)
+                .OrderByDescending(ItemModifiedAt)
+                .FirstOrDefault();
+            modifiedAt = _statusItem is null ? null : ItemModifiedAt(_statusItem);
+        }
+        itemDateStatus.Text = modifiedAt is DateTimeOffset date
+            ? $"Modified: {date.ToLocalTime():yyyy-MM-dd HH:mm:ss}"
+            : "Modified: —";
+    }
+
+    private void ItemDateStatus_DoubleClick(object? sender, EventArgs e)
+    {
+        if (_statusItem is null || SelectedWorkspace() is not Panel workspace || PageFromWorkspace(workspace).Type == "Text") return;
+        var control = workspace.Controls.OfType<Control>().FirstOrDefault(c => ReferenceEquals(c.Tag, _statusItem));
+        if (control is not null) SelectSingle(workspace, control);
+    }
+
+    private static DateTimeOffset? ItemModifiedAt(Item item) => item.TextUpdatedAt ?? item.CreatedAt;
 
     private static TabControl SubTabsFromPage(TabPage page) => (TabControl)page.Controls[0];
     private static Panel WorkspaceFromSubPage(TabPage sub) => (Panel)sub.Controls[0];
