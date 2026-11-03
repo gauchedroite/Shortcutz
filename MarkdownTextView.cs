@@ -38,10 +38,11 @@ internal sealed class MarkdownTextView : Control
     private sealed record Run(string Text, FontStyle Style = FontStyle.Regular, bool Code = false, string? Link = null);
     private sealed record Fragment(string Text, Font Font, Color Color, Rectangle Bounds, string? Link, int Start);
     private sealed record LinkHit(Rectangle Bounds, string Url);
-    private sealed class LayoutData(List<Fragment> fragments, List<LinkHit> links, List<Font> fonts, int height, string text) : IDisposable
+    private sealed class LayoutData(List<Fragment> fragments, List<LinkHit> links, List<Rectangle> rules, List<Font> fonts, int height, string text) : IDisposable
     {
         public List<Fragment> Fragments { get; } = fragments;
         public List<LinkHit> Links { get; } = links;
+        public List<Rectangle> Rules { get; } = rules;
         public int Height { get; } = height;
         public string Text { get; } = text;
         public void Dispose() { foreach (var font in fonts) font.Dispose(); }
@@ -74,9 +75,10 @@ internal sealed class MarkdownTextView : Control
     {
         using var layout = CreateLayout(Math.Max(1, width));
         int pageLimit = Math.Min(layout.Height, offsetY + pageHeight);
-        int nextOffset = layout.Fragments
-            .Where(fragment => fragment.Bounds.Top >= offsetY && fragment.Bounds.Bottom <= pageLimit)
-            .Select(fragment => fragment.Bounds.Bottom)
+        int nextOffset = layout.Fragments.Select(fragment => fragment.Bounds)
+            .Concat(layout.Rules)
+            .Where(bounds => bounds.Top >= offsetY && bounds.Bottom <= pageLimit)
+            .Select(bounds => bounds.Bottom)
             .DefaultIfEmpty(pageLimit)
             .Max();
         if (nextOffset <= offsetY) nextOffset = pageLimit;
@@ -88,8 +90,12 @@ internal sealed class MarkdownTextView : Control
             bounds.Y -= offsetY;
             DrawText(graphics, fragment.Text, bounds.Left, bounds, fragment.Font, fragment.Color);
         }
+        using (var pen = new Pen(ForeColor))
+            foreach (var rule in layout.Rules.Where(rule => rule.Bottom > offsetY && rule.Top < nextOffset))
+                graphics.DrawLine(pen, rule.Left, rule.Top - offsetY, rule.Right - 1, rule.Top - offsetY);
 
-        bool hasMore = layout.Fragments.Any(fragment => fragment.Bounds.Bottom > nextOffset);
+        bool hasMore = layout.Fragments.Any(fragment => fragment.Bounds.Bottom > nextOffset) ||
+            layout.Rules.Any(rule => rule.Bottom > nextOffset);
         int nextPageOffset = hasMore ? nextOffset : layout.Height;
         Debug.Assert(nextPageOffset > offsetY || layout.Height <= offsetY);
         return (layout.Height, nextPageOffset);
@@ -128,6 +134,9 @@ internal sealed class MarkdownTextView : Control
             x += selectedWidth;
             DrawText(e.Graphics, after, x, fragment.Bounds, fragment.Font, fragment.Color);
         }
+        using (var pen = new Pen(ForeColor))
+            foreach (var rule in layout.Rules)
+                e.Graphics.DrawLine(pen, rule.Left, rule.Top, rule.Right - 1, rule.Top);
         _linkHits = layout.Links;
     }
 
@@ -291,8 +300,10 @@ internal sealed class MarkdownTextView : Control
 
     private LayoutData CreateLayout(int width)
     {
+        width = Math.Max(1, width);
         var fragments = new List<Fragment>();
         var links = new List<LinkHit>();
+        var rules = new List<Rectangle>();
         var fonts = new List<Font>();
         var plainText = new StringBuilder();
         bool firstBlock = true;
@@ -319,6 +330,12 @@ internal sealed class MarkdownTextView : Control
                 y += Math.Max(3, Font.Height / 2);
                 continue;
             }
+            if (block.Kind == BlockKind.Rule)
+            {
+                rules.Add(new Rectangle(0, y + Font.Height / 2, width, 1));
+                y += Font.Height + 4;
+                continue;
+            }
 
             var runs = new List<Run>();
             int indent = 0;
@@ -332,9 +349,6 @@ internal sealed class MarkdownTextView : Control
                 case BlockKind.Quote:
                     runs.Add(new Run("│ ", FontStyle.Italic));
                     indent = 12;
-                    break;
-                case BlockKind.Rule:
-                    runs.Add(new Run("────────────────────────", FontStyle.Regular));
                     break;
             }
             runs.AddRange(block.Kind == BlockKind.Code
@@ -374,7 +388,7 @@ internal sealed class MarkdownTextView : Control
             }
             y += Math.Max(lineHeight, Font.Height) + (block.Kind == BlockKind.Heading ? 3 : 4);
         }
-        return new LayoutData(fragments, links, fonts, Math.Max(Font.Height, y), plainText.ToString());
+        return new LayoutData(fragments, links, rules, fonts, Math.Max(Font.Height, y), plainText.ToString());
     }
 
     // shortcut: one level of bullet nesting only; use a full parser for nested ordered lists, deeper nesting, tables, or raw HTML.

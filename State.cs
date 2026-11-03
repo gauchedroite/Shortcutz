@@ -60,7 +60,6 @@ public sealed class NoteItem(string text, int x, int y, int width = NoteItem.Def
 {
     public const int DefaultWidth = 240;
     public const int MinWidth = 40;
-    public const int MaxWidth = 600;
     public string Text = text;
     public int Width = width;
     public string? Color = color;

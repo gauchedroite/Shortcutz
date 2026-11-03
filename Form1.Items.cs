@@ -1131,7 +1131,7 @@ public partial class Form1
             if (!resizing) return;
             var now = grip.PointToScreen(e.Location);
             int delta = (int)((now.X - resizeStartMouse.X) / _zoom);
-            item.Width = Math.Clamp(resizeStartWidth + delta, NoteItem.MinWidth, NoteItem.MaxWidth);
+            item.Width = Math.Max(resizeStartWidth + delta, NoteItem.MinWidth);
             ScaleNoteView(note, item);
         };
         grip.MouseUp += (s, e) =>
