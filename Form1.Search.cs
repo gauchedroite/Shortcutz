@@ -6,16 +6,24 @@ public partial class Form1
     private readonly TextBox _searchBox = new() { Dock = DockStyle.Fill, Font = TitleFont };
     private readonly ListBox _searchResults = new() { Dock = DockStyle.Top, Height = 150, Visible = false, Font = TitleFont };
     private readonly List<(Tab Tab, Page Page, Item? Item)> _searchMatches = new();
+    private readonly System.Windows.Forms.Timer _searchBlinkTimer = new() { Interval = 50 };
+    private Control? _searchBlinkControl;
+    private int _searchBlinkTicks;
 
     private void InitSearch()
     {
         _searchPanel.Controls.Add(_searchBox);
         Controls.Add(_searchResults);
         Controls.Add(_searchPanel);
-        _searchResults.BringToFront();
-        _searchPanel.BringToFront();
+        Controls.SetChildIndex(tabs, 0);
+        Controls.SetChildIndex(statusStrip, 1);
+        Controls.SetChildIndex(_searchResults, 2);
+        Controls.SetChildIndex(_searchPanel, 3);
+        Controls.SetChildIndex(stateStrip, 4);
 
         _searchBox.TextChanged += (s, e) => RunSearch();
+        _searchBlinkTimer.Tick += SearchBlinkTimer_Tick;
+        FormClosing += (s, e) => { StopSearchBlink(); _searchBlinkTimer.Dispose(); };
         _searchBox.KeyDown += SearchBox_KeyDown;
         _searchResults.DoubleClick += (s, e) => ActivateSearchResult();
         // Live navigation: arrow keys and single clicks jump straight to the result
@@ -38,6 +46,7 @@ public partial class Form1
 
     private void HideSearch()
     {
+        StopSearchBlink();
         _searchPanel.Visible = false;
         _searchResults.Visible = false;
         ActiveControl = null;
@@ -53,7 +62,20 @@ public partial class Form1
         _searchResults.Items.Clear();
         _searchMatches.Clear();
         var query = _searchBox.Text.Trim();
-        if (query.Length > 0)
+        if (query.Equals("date", StringComparison.OrdinalIgnoreCase))
+        {
+            var recentItems = _board.Tabs
+                .SelectMany(tab => tab.Pages
+                    .Where(page => page.Type != "Text")
+                    .SelectMany(page => page.Items.Select(item => (Tab: tab, Page: page, Item: item, ModifiedAt: ItemModifiedAt(item)))))
+                .Where(result => result.ModifiedAt.HasValue)
+                .OrderByDescending(result => result.ModifiedAt)
+                .Take(200);
+            foreach (var result in recentItems)
+                AddMatch(result.Tab, result.Page, result.Item,
+                    $"{result.Tab.Name} > {result.Page.Name} > {OneLine(GetItemDisplayName(result.Item))}  (Modified: {result.ModifiedAt!.Value.ToLocalTime():yyyy-MM-dd HH:mm:ss})");
+        }
+        else if (query.Length > 0)
         {
             foreach (var tab in _board.Tabs)
                 foreach (var page in tab.Pages)
@@ -141,6 +163,7 @@ public partial class Form1
     {
         var idx = _searchResults.SelectedIndex;
         if (idx < 0 || idx >= _searchMatches.Count) return;
+        StopSearchBlink();
         var (tab, page, item) = _searchMatches[idx];
         var tabIndex = _board.Tabs.IndexOf(tab);
         if (tabIndex < 0 || tabIndex >= tabs.TabPages.Count) return;
@@ -159,7 +182,37 @@ public partial class Form1
         var workspace = WorkspaceFromSubPage(subTabs.TabPages[subIndex]);
         var control = workspace.Controls.OfType<Control>().FirstOrDefault(c => c.Tag == item);
         if (control is not null)
+        {
             SelectSingle(workspace, control);
+            StartSearchBlink(control);
+        }
         // shortcut: no scroll-into-view for items outside the visible area, upgrade if boards get larger
+    }
+
+    private void StartSearchBlink(Control control)
+    {
+        StopSearchBlink();
+        _searchBlinkControl = control;
+        _searchBlinkTicks = 0;
+        SetSelected(control, false);
+        _searchBlinkTimer.Start();
+    }
+
+    private void SearchBlinkTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_searchBlinkControl is not { IsDisposed: false } control || ++_searchBlinkTicks >= 6)
+        {
+            StopSearchBlink();
+            return;
+        }
+        SetSelected(control, _searchBlinkTicks % 2 == 1);
+    }
+
+    private void StopSearchBlink()
+    {
+        _searchBlinkTimer.Stop();
+        if (_searchBlinkControl is { IsDisposed: false } control)
+            SetSelected(control, true);
+        _searchBlinkControl = null;
     }
 }

@@ -16,7 +16,7 @@ Built with .NET 10 Windows Forms.
 - Text pages. Add a text page from the page-tab menu. Press `F5` or right-click its tab to toggle Markdown preview. Preview supports headings, lists, quotes, code, links, and inline emphasis. The monospace option applies in Edit mode only. See [Markdown in Shortcutz](#markdown-in-shortcutz) for supported syntax and limits.
 - Notes render Markdown; double-click to edit the source. Icon labels support bold with `**text**`.
 - Multi-select. Drag on an empty part of a board to select items. Move, copy, cut, or delete selected items together.
-- Search. Search tab names, page names, notes, text pages, item labels, and file paths.
+- Search. Search tab names, page names, notes, text pages, item labels, and file paths. Search for `date` to list up to 200 items by modification time, newest first.
 - Zoom. Each page keeps its own zoom level.
 - Compact icons. Select icons and press `Ctrl+M` to change their layout.
 - Notepad++. Hold `Shift` and double-click a file item to open it in Notepad++.
