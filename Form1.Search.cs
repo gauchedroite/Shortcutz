@@ -31,7 +31,7 @@ public partial class Form1
         _searchResults.KeyDown += (s, e) =>
         {
             if (e.KeyCode == Keys.Enter) { e.Handled = true; e.SuppressKeyPress = true; ActivateSearchResult(); }
-            else if (e.KeyCode == Keys.Escape) { e.Handled = true; HideSearch(); }
+            else if (e.KeyCode == Keys.Escape) { e.Handled = true; e.SuppressKeyPress = true; HideSearch(); }
         };
     }
 

@@ -245,6 +245,7 @@ public partial class Form1 : Form
         if (e.KeyCode == Keys.Escape && _searchPanel.Visible)
         {
             e.Handled = true;
+            e.SuppressKeyPress = true;
             HideSearch();
             return;
         }
