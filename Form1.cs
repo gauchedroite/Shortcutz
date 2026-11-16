@@ -201,6 +201,11 @@ public partial class Form1 : Form
         _tabPairInitialized = true;
 
         FormClosing += (s, e) => SaveState();
+        Shown += (s, e) =>
+        {
+            if (SelectedWorkspace() is Panel workspace)
+                workspace.AutoScrollPosition = Point.Empty;
+        };
         KeyPreview = true;
         KeyDown += Form1_KeyDown;
     }
@@ -318,11 +323,13 @@ public partial class Form1 : Form
                     var placed = new List<Rectangle>();
                     foreach (var panel in icons)
                     {
-                        panel.Location = SnapCompactIconToList(workspace, panel, panel.Location, moving, placed);
+                        var location = SnapCompactIconToList(workspace, panel,
+                            WorkspaceControlLocation(workspace, panel), moving, placed);
+                        SetWorkspaceControlLocation(workspace, panel, location);
                         var item = (IconItem)panel.Tag!;
-                        item.X = (int)(panel.Left / _zoom);
-                        item.Y = (int)(panel.Top / _zoom);
-                        placed.Add(panel.Bounds);
+                        item.X = (int)(location.X / _zoom);
+                        item.Y = (int)(location.Y / _zoom);
+                        placed.Add(WorkspaceControlBounds(workspace, panel));
                     }
                 }
                 _board.Dirty();
@@ -684,6 +691,7 @@ public partial class Form1 : Form
         else
             foreach (var item in page.Items)
                 CreateView(workspace, item);
+        workspace.AutoScrollPosition = Point.Empty;
     }
 
     private void ToggleMarkdownPreview()
@@ -772,6 +780,7 @@ public partial class Form1 : Form
         var workspace = new Panel
         {
             Dock = DockStyle.Fill,
+            AutoScroll = true,
             AllowDrop = true,
             BackColor = WorkspaceBackColor,
             Tag = page

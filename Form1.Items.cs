@@ -212,7 +212,8 @@ public partial class Form1
                 break;
             case ImageItem imageItem:
                 var view = (PictureBox)c;
-                view.Location = new Point((int)(imageItem.X * _zoom), (int)(imageItem.Y * _zoom));
+                SetWorkspaceControlLocation((Panel)view.Parent!, view,
+                    new Point((int)(imageItem.X * _zoom), (int)(imageItem.Y * _zoom)));
                 view.Size = new Size(Math.Max(1, (int)(imageItem.Width * _zoom)), Math.Max(1, (int)(imageItem.Height * _zoom)));
                 break;
         }
@@ -276,7 +277,8 @@ public partial class Form1
             : padding + iconHeight + titleSize.Height + padding;
 
         panel.Size = new Size(panelWidth, panelHeight);
-        panel.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
+        SetWorkspaceControlLocation((Panel)panel.Parent!, panel,
+            new Point((int)(item.X * _zoom), (int)(item.Y * _zoom)));
 
         icon.Size = new Size(iconWidth, iconHeight);
         icon.Location = new Point(
@@ -312,7 +314,8 @@ public partial class Form1
         int contentHeight = markdown.ContentHeight(markdown.Width);
         note.Height = Math.Max((int)(40 * _zoom), contentHeight + note.Padding.Vertical + border);
         markdown.Height = contentHeight;
-        note.Location = new Point((int)(item.X * _zoom), (int)(item.Y * _zoom));
+        SetWorkspaceControlLocation((Panel)note.Parent!, note,
+            new Point((int)(item.X * _zoom), (int)(item.Y * _zoom)));
     }
 
     private static Font CreateTextPageFont(Page page) => new(
@@ -486,12 +489,13 @@ public partial class Form1
                     .ToList()
                     .Select(c =>
                     {
+                        var location = WorkspaceControlLocation(workspace, c);
                         var g = CreateDragGhost(c);
-                        g.Location = c.Location;
                         workspace.Controls.Add(g);
+                        SetWorkspaceControlLocation(workspace, g, location);
                         g.BringToFront();
                         c.SendToBack();
-                        return (c, (Item)c.Tag!, c.Location, g);
+                        return (c, (Item)c.Tag!, location, g);
                     })
                     .ToList();
             },
@@ -499,8 +503,8 @@ public partial class Form1
             {
                 if (dragGroup is null) return;
                 foreach (var (_, _, gs, g) in dragGroup)
-                    g.Location = Clamp(workspace, g.Size,
-                        new Point(gs.X + dx, gs.Y + dy));
+                    SetWorkspaceControlLocation(workspace, g, Clamp(workspace, g.Size,
+                        new Point(gs.X + dx, gs.Y + dy)));
             },
             onClick: () =>
             {
@@ -556,13 +560,15 @@ public partial class Form1
                 var placed = new List<Rectangle>();
                 foreach (var (c, i, _, g) in dragGroup)
                 {
-                    c.Location = i is IconItem iconItem && iconItem.Compact
-                        ? SnapCompactIconToList(workspace, c, g.Location, moving, placed)
-                        : SnapToGrid(workspace, c.Size, g.Location);
-                    i.X = (int)(c.Left / _zoom);
-                    i.Y = (int)(c.Top / _zoom);
+                    var location = WorkspaceControlLocation(workspace, g);
+                    location = i is IconItem iconItem && iconItem.Compact
+                        ? SnapCompactIconToList(workspace, c, location, moving, placed)
+                        : SnapToGrid(workspace, c.Size, location);
+                    SetWorkspaceControlLocation(workspace, c, location);
+                    i.X = (int)(location.X / _zoom);
+                    i.Y = (int)(location.Y / _zoom);
                     c.BringToFront();
-                    placed.Add(c.Bounds);
+                    placed.Add(WorkspaceControlBounds(workspace, c));
                 }
                 foreach (var (_, _, _, g) in dragGroup)
                     DisposeDragGhost(g, workspace);
@@ -766,7 +772,8 @@ public partial class Form1
         var page = PageFromWorkspace(workspace);
         int minX = _clipboard.Min(i => i.X);
         int minY = _clipboard.Min(i => i.Y);
-        var pasteLoc = location ?? new Point(workspace.Width / 2, workspace.Height / 2);
+        var pasteLoc = location ?? WorkspaceContentPoint(workspace,
+            new Point(workspace.ClientSize.Width / 2, workspace.ClientSize.Height / 2));
         var loc = SnapToGrid(workspace, new Size(1, 1), pasteLoc);
         int dx = (int)(loc.X / _zoom) - minX;
         int dy = (int)(loc.Y / _zoom) - minY;
@@ -813,7 +820,8 @@ public partial class Form1
 
             var size = new Size(Math.Max(1, (int)(width * _zoom)), Math.Max(1, (int)(height * _zoom)));
             var location = SnapToGrid(workspace, size,
-                pasteAt ?? new Point(workspace.ClientSize.Width / 2, workspace.ClientSize.Height / 2));
+                pasteAt ?? WorkspaceContentPoint(workspace,
+                    new Point(workspace.ClientSize.Width / 2, workspace.ClientSize.Height / 2)));
             var item = new ImageItem(path, (int)(location.X / _zoom), (int)(location.Y / _zoom), width, height);
             page.Items.Add(item);
             try { CreateImageView(workspace, item); }
@@ -891,12 +899,13 @@ public partial class Form1
                     .Where(IsSelected)
                     .Select(c =>
                     {
+                        var location = WorkspaceControlLocation(workspace, c);
                         var ghost = CreateDragGhost(c);
-                        ghost.Location = c.Location;
                         workspace.Controls.Add(ghost);
+                        SetWorkspaceControlLocation(workspace, ghost, location);
                         ghost.BringToFront();
                         c.SendToBack();
-                        return (c, (Item)c.Tag!, c.Location, ghost);
+                        return (c, (Item)c.Tag!, location, ghost);
                     })
                     .ToList();
             },
@@ -904,7 +913,8 @@ public partial class Form1
             {
                 if (dragGroup is null) return;
                 foreach (var (_, _, start, ghost) in dragGroup)
-                    ghost.Location = Clamp(workspace, ghost.Size, new Point(start.X + dx, start.Y + dy));
+                    SetWorkspaceControlLocation(workspace, ghost,
+                        Clamp(workspace, ghost.Size, new Point(start.X + dx, start.Y + dy)));
             },
             onClick: () =>
             {
@@ -916,9 +926,10 @@ public partial class Form1
                 if (dragGroup is null) return;
                 foreach (var (control, dragged, _, ghost) in dragGroup)
                 {
-                    control.Location = SnapToGrid(workspace, control.Size, ghost.Location);
-                    dragged.X = (int)(control.Left / _zoom);
-                    dragged.Y = (int)(control.Top / _zoom);
+                    var location = SnapToGrid(workspace, control.Size, WorkspaceControlLocation(workspace, ghost));
+                    SetWorkspaceControlLocation(workspace, control, location);
+                    dragged.X = (int)(location.X / _zoom);
+                    dragged.Y = (int)(location.Y / _zoom);
                     control.BringToFront();
                     DisposeDragGhost(ghost, workspace);
                 }
@@ -1013,12 +1024,13 @@ public partial class Form1
                     .ToList()
                     .Select(c =>
                     {
+                        var location = WorkspaceControlLocation(workspace, c);
                         var g = CreateDragGhost(c);
-                        g.Location = c.Location;
                         workspace.Controls.Add(g);
+                        SetWorkspaceControlLocation(workspace, g, location);
                         g.BringToFront();
                         c.SendToBack();
-                        return (c, (Item)c.Tag!, c.Location, g);
+                        return (c, (Item)c.Tag!, location, g);
                     })
                     .ToList();
             },
@@ -1026,8 +1038,8 @@ public partial class Form1
             {
                 if (dragGroup is null) return;
                 foreach (var (_, _, gs, g) in dragGroup)
-                    g.Location = Clamp(workspace, g.Size,
-                        new Point(gs.X + dx, gs.Y + dy));
+                    SetWorkspaceControlLocation(workspace, g, Clamp(workspace, g.Size,
+                        new Point(gs.X + dx, gs.Y + dy)));
             },
             onClick: () =>
             {
@@ -1046,9 +1058,10 @@ public partial class Form1
                 if (dragGroup is null) return;
                 foreach (var (c, i, _, g) in dragGroup)
                 {
-                    c.Location = SnapToGrid(workspace, c.Size, g.Location);
-                    i.X = (int)(c.Left / _zoom);
-                    i.Y = (int)(c.Top / _zoom);
+                    var location = SnapToGrid(workspace, c.Size, WorkspaceControlLocation(workspace, g));
+                    SetWorkspaceControlLocation(workspace, c, location);
+                    i.X = (int)(location.X / _zoom);
+                    i.Y = (int)(location.Y / _zoom);
                     c.BringToFront();
                 }
                 foreach (var (_, _, _, g) in dragGroup)
@@ -1143,8 +1156,8 @@ public partial class Form1
         };
         note.Controls.Add(grip);
 
-        ApplyZoomToControl(note);
         workspace.Controls.Add(note);
+        ApplyZoomToControl(note);
     }
 
     private static void DisposeItemControl(Control c)
@@ -1165,9 +1178,25 @@ public partial class Form1
         c.Dispose();
     }
 
+    private static Point WorkspaceContentPoint(Panel workspace, Point point) =>
+        new(point.X - workspace.AutoScrollPosition.X, point.Y - workspace.AutoScrollPosition.Y);
+
+    private static Point WorkspaceControlLocation(Panel workspace, Control control) =>
+        WorkspaceContentPoint(workspace, control.Location);
+
+    private static Rectangle WorkspaceControlBounds(Panel workspace, Control control)
+    {
+        var bounds = control.Bounds;
+        bounds.Location = WorkspaceContentPoint(workspace, bounds.Location);
+        return bounds;
+    }
+
+    private static void SetWorkspaceControlLocation(Panel workspace, Control control, Point point) =>
+        control.Location = new Point(point.X + workspace.AutoScrollPosition.X, point.Y + workspace.AutoScrollPosition.Y);
+
     private static Point Clamp(Panel workspace, Size size, Point p)
     {
-        var r = workspace.ClientRectangle;
+        var r = workspace.DisplayRectangle;
         int x = Math.Max(0, Math.Min(p.X, Math.Max(0, r.Width - size.Width)));
         int y = Math.Max(0, Math.Min(p.Y, Math.Max(0, r.Height - size.Height)));
         return new Point(x, y);
@@ -1187,13 +1216,14 @@ public partial class Form1
         var grid = (int)(GridSize * _zoom);
         if (grid == 0) grid = GridSize;
         int x = (int)Math.Round((double)p.X / grid) * grid;
-        x = Math.Clamp(x, 0, Math.Max(0, workspace.Width - item.Width));
-        int maxRow = Math.Max(0, workspace.Height - item.Height) / grid;
+        var canvas = workspace.DisplayRectangle;
+        x = Math.Clamp(x, 0, Math.Max(0, canvas.Width - item.Width));
+        int maxRow = Math.Max(0, canvas.Height - item.Height) / grid;
         int desiredRow = (int)Math.Round((double)p.Y / grid);
 
         bool IsOccupied(Rectangle bounds) =>
             placed.Any(bounds.IntersectsWith) ||
-            workspace.Controls.OfType<Control>().Any(c => !moving.Contains(c) && IsSelectable(c) && bounds.IntersectsWith(c.Bounds));
+            workspace.Controls.OfType<Control>().Any(c => !moving.Contains(c) && IsSelectable(c) && bounds.IntersectsWith(WorkspaceControlBounds(workspace, c)));
 
         foreach (var row in Enumerable.Range(0, maxRow + 1).OrderBy(row => Math.Abs(row - desiredRow)))
         {
@@ -1203,17 +1233,17 @@ public partial class Form1
             return bounds.Location;
         }
 
-        // shortcut: if no list row is free, leave the item where it was; add scrolling when pages need more rows.
-        return item.Location;
+        return new Point(x, (maxRow + 1) * grid);
     }
 
     private void PlaceCompactIconInList(Panel workspace, Panel item)
     {
         var moving = new HashSet<Control> { item };
-        item.Location = SnapCompactIconToList(workspace, item, item.Location, moving, new List<Rectangle>());
+        var location = SnapCompactIconToList(workspace, item, WorkspaceControlLocation(workspace, item), moving, new List<Rectangle>());
+        SetWorkspaceControlLocation(workspace, item, location);
         var icon = (IconItem)item.Tag!;
-        icon.X = (int)(item.Left / _zoom);
-        icon.Y = (int)(item.Top / _zoom);
+        icon.X = (int)(location.X / _zoom);
+        icon.Y = (int)(location.Y / _zoom);
     }
 
 }

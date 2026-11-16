@@ -184,9 +184,9 @@ public partial class Form1
         if (control is not null)
         {
             SelectSingle(workspace, control);
+            workspace.ScrollControlIntoView(control);
             StartSearchBlink(control);
         }
-        // shortcut: no scroll-into-view for items outside the visible area, upgrade if boards get larger
     }
 
     private void StartSearchBlink(Control control)

@@ -161,7 +161,7 @@ public partial class Form1
     private void Workspace_DragDrop(object? sender, DragEventArgs e)
     {
         if (sender is not Panel workspace || e.Data is null) return;
-        var dropPoint = workspace.PointToClient(new Point(e.X, e.Y));
+        var dropPoint = WorkspaceContentPoint(workspace, workspace.PointToClient(new Point(e.X, e.Y)));
         var page = PageFromWorkspace(workspace);
         var iconSize = new Size(110, 90);
 
@@ -625,7 +625,7 @@ public partial class Form1
         {
             if (workspace.GetChildAtPoint(e.Location) == null)
             {
-                _lastWorkspaceMenuLocation = e.Location;
+                _lastWorkspaceMenuLocation = WorkspaceContentPoint(workspace, e.Location);
                 _workspaceMenu.Show(workspace, e.Location);
             }
             return;
@@ -655,8 +655,11 @@ public partial class Form1
         using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
         const int r = 1;
         var bounds = workspace.ClientRectangle;
-        for (int x = 0; x < bounds.Width; x += GridSize)
-            for (int y = 0; y < bounds.Height; y += GridSize)
+        var scroll = workspace.AutoScrollPosition;
+        int startX = (GridSize - (-scroll.X % GridSize)) % GridSize;
+        int startY = (GridSize - (-scroll.Y % GridSize)) % GridSize;
+        for (int x = startX; x < bounds.Width; x += GridSize)
+            for (int y = startY; y < bounds.Height; y += GridSize)
                 g.FillEllipse(brush, x - r, y - r, r * 2, r * 2);
     }
 
@@ -669,8 +672,9 @@ public partial class Form1
 
     private void SelectItems(Panel workspace, Rectangle rect)
     {
+        rect.Location = WorkspaceContentPoint(workspace, rect.Location);
         foreach (var c in workspace.Controls.OfType<Control>().Where(IsSelectable))
-            if (rect.IntersectsWith(c.Bounds))
+            if (rect.IntersectsWith(WorkspaceControlBounds(workspace, c)))
                 SetSelected(c, true);
         UpdateItemStatus(workspace);
     }
@@ -702,7 +706,8 @@ public partial class Form1
         if (workspace.GetChildAtPoint(e.Location) != null) return;
         var text = Prompt("New note", "Enter note text:", "", multiline: true);
         if (string.IsNullOrWhiteSpace(text)) return;
-        var loc = Clamp(workspace, new Size((int)(NoteItem.DefaultWidth * _zoom), (int)(40 * _zoom)), e.Location);
+        var loc = Clamp(workspace, new Size((int)(NoteItem.DefaultWidth * _zoom), (int)(40 * _zoom)),
+            WorkspaceContentPoint(workspace, e.Location));
         var item = new NoteItem(text, (int)(loc.X / _zoom), (int)(loc.Y / _zoom));
         PageFromWorkspace(workspace).Items.Add(item);
         CreateNoteView(workspace, item);
